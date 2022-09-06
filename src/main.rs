@@ -188,7 +188,7 @@ fn scan_dirs_and_preset_files(
         let mut resources: HashSet<Resource> = HashSet::new();
         let dir_listing = match read_dir(file_path) {
             Err(why) => {
-                println!("Cannot list directory {file_path:?} ({why})");
+                eprintln!("Cannot list directory {file_path:?} ({why})");
                 return resources;
             }
             Ok(listing) => listing,
@@ -196,7 +196,7 @@ fn scan_dirs_and_preset_files(
         for entry in dir_listing {
             match entry {
                 Err(ref why) => {
-                    println!("Cannot read file entry {entry:?} ({why})");
+                    eprintln!("Cannot read file entry {entry:?} ({why})");
                     continue;
                 }
                 Ok(entry) => {
@@ -212,7 +212,7 @@ fn scan_dirs_and_preset_files(
                 let bytes = file_path.as_os_str().as_bytes();
                 let (cow, _, has_errors) = WINDOWS_1252.decode(&bytes);
                 if has_errors {
-                    println!(
+                    eprintln!(
                         "Path is neither UTF-8- nor Windows1252-/latin1-encoded {file_path:?}"
                     );
                     return HashSet::new();
@@ -236,14 +236,14 @@ fn scan_preset_file(
     let empty = HashSet::new();
     let mut preset_file = match File::open(file_path) {
         Err(why) => {
-            println!("Cannot open file {file_path_str:?} ({why})");
+            eprintln!("Cannot open file {file_path_str:?} ({why})");
             return empty;
         }
         Ok(file) => file,
     };
     let preset_len = match metadata(file_path) {
         Err(why) => {
-            println!("Cannot read properties for file {file_path_str:?} ({why})");
+            eprintln!("Cannot read properties for file {file_path_str:?} ({why})");
             return empty;
         }
         Ok(file_metadata) => file_metadata.len() as usize,
@@ -251,19 +251,19 @@ fn scan_preset_file(
     let mut preset_bytes: Vec<u8> = Vec::with_capacity(preset_len);
     match preset_file.read_to_end(&mut preset_bytes) {
         Err(why) => {
-            println!("Cannot read from file {file_path_str:?} ({why})");
+            eprintln!("Cannot read from file {file_path_str:?} ({why})");
             return empty;
         }
         Ok(_n) => (),
     }
     if preset_len < AVS_HEADER_LEN {
-        println!("File too short '{file_path_str}'");
+        eprintln!("File too short '{file_path_str}'");
         return empty;
     }
     let header = &preset_bytes[0..AVS_HEADER_LEN];
     let mut pos: usize = AVS_HEADER_LEN;
     if header != AVS_HEADER_02 && header != AVS_HEADER_01 {
-        println!("Header wrong in '{file_path_str}'");
+        eprintln!("Header wrong in '{file_path_str}'");
         return empty;
     }
     pos += 1; // "Clear Every Frame"
@@ -314,7 +314,7 @@ fn scan_components(
                 };
                 if string.is_empty() {
                     match spec.empty_significance {
-                        Empty::IsError | Empty::IsRare => println!(
+                        Empty::IsError | Empty::IsRare => eprintln!(
                             "{} {} is empty in '{file_path_str}' @0x{pos:x}",
                             spec.name, spec.rtype,
                         ),
