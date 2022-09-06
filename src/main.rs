@@ -438,7 +438,7 @@ impl std::fmt::Debug for CompID {
             CompID::Ape(id) => write!(
                 fmt,
                 "APE '{}'",
-                string_from_u8vec_ntstr1252(&Vec::from(id), 0, AVS_APE_ID_LEN)
+                string_from_u8vec_ntstr1252(&id.to_vec(), 0, AVS_APE_ID_LEN)
             ),
         }
     }
