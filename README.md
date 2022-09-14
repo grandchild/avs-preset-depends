@@ -61,7 +61,6 @@ If you pass multiple paths, it will output separate lists for each path.
 - Translate APE ID strings into `.ape` filenames if available.
 - Make precompiled releases downloadable
 - Allow setting a `Winamp/Plugins/avs` base-dir to find and print full paths for available and warnings for missing files
-- Fix YAML output (i.e. quote values with ": " in them)
 
 ### License
 

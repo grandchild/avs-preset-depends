@@ -173,7 +173,12 @@ fn main() {
                         println!("  {t}s:");
                         section_header_printed = true;
                     }
-                    println!("    - {string}");
+                    if needs_quote_for_yaml(&string) {
+                        let escaped_string = string.escape_default();
+                        println!("    - \"{escaped_string}\"");
+                    } else {
+                        println!("    - {string}");
+                    }
                 }
             }
         }
@@ -416,6 +421,40 @@ fn get_global_vars_file_name(buf: &Vec<u8>, pos: usize) -> String {
         }
     }
     string_from_u8vec_ntstr1252(buf, file_str_start, WIN32_MAX_PATH)
+}
+
+fn needs_quote_for_yaml(string: &str) -> bool {
+    if string.is_empty() {
+        return true;
+    }
+    let mut is_number = true;
+    let mut no_number_separator_yet = true;
+    for c in string.chars() {
+        match c {
+            '0'..='9' => (),
+            '.' | 'e' if no_number_separator_yet => no_number_separator_yet = false,
+            'x' if string.starts_with("0x") && no_number_separator_yet => {
+                no_number_separator_yet = false
+            }
+            _ => {
+                is_number = false;
+                break;
+            }
+        }
+    }
+    let special_start_chars = [
+        '.', '&', '*', '?', '|', '-', '<', '>', '=', '!', '%', '@', '`', '{', '[', '\'', ' ', '#',
+    ];
+    is_number
+        || string.starts_with(special_start_chars)
+        || string.contains(": ")
+        || string.contains(|c: char| match c {
+            '\0'..='\x1f' => true,
+            _ => false,
+        })
+        || string.ends_with([' ', ':'])
+        || ["yes", "no", "true", "false", "on", "off", "null", "~"]
+            .contains(&string.to_lowercase().as_str())
 }
 
 impl std::fmt::Debug for FieldType {
