@@ -297,7 +297,7 @@ fn scan_components(
                 if string.len() > 2 {
                     // TODO: Check what's up with empty APE IDs!
                     resources.insert(Resource {
-                        string: string,
+                        string,
                         rtype: ResourceType::Ape,
                     });
                 }
@@ -313,17 +313,16 @@ fn scan_components(
                     FieldType::Function(f) => f(buf, pos),
                 };
                 if string.is_empty() {
-                    match spec.empty_significance {
-                        Empty::IsError | Empty::IsRare => eprintln!(
+                    if let Empty::IsError | Empty::IsRare = spec.empty_significance {
+                        eprintln!(
                             "{} {} is empty in '{file_path_str}' @0x{pos:x}",
                             spec.name, spec.rtype,
-                        ),
-                        Empty::IsDefault | Empty::IsCommon => (),
+                        )
                     }
                 }
                 if !string.is_empty() {
                     resources.insert(Resource {
-                        string: string,
+                        string,
                         rtype: spec.rtype,
                     });
                 }
@@ -362,9 +361,7 @@ fn get_component_len_and_id(
     let component_code = i32_from_u8arr(buf, pos);
     pos += SIZE_INT32;
     let id = match component_code {
-        _ if component_code >= AVS_APE_SEPARATOR => {
-            CompID::Ape(*u8arr_fixed_slice::<AVS_APE_ID_LEN>(buf, pos))
-        }
+        AVS_APE_SEPARATOR.. => CompID::Ape(*u8arr_fixed_slice::<AVS_APE_ID_LEN>(buf, pos)),
         _ => CompID::Builtin(component_code),
     };
     if component_code >= AVS_APE_SEPARATOR {
