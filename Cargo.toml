@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-encoding_rs = "0.8"
 iterable_enum_derive = { path = "iterable_enum_derive" }
 
 [profile.release]
