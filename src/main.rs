@@ -30,7 +30,8 @@ enum CompID {
 #[derive(Clone, Copy)]
 enum FieldType {
     NtStr(/*max_len*/ usize),
-    // SizeStr,
+    #[allow(dead_code)]
+    SizeStr,
     Function(fn(&Vec<u8>, usize) -> String),
 }
 #[derive(Eq, Hash, PartialEq, Clone, Copy, IterableEnum)]
@@ -310,7 +311,7 @@ fn scan_components(
                     FieldType::NtStr(max_len) => {
                         string_from_u8vec_ntstr1252(buf, pos + spec.offset, max_len)
                     }
-                    // FieldType::SizeStr => string_from_u8vec_sizestr1252(buf, pos + spec.offset),
+                    FieldType::SizeStr => string_from_u8vec_sizestr1252(buf, pos + spec.offset),
                     FieldType::Function(f) => f(buf, pos),
                 };
                 if string.is_empty() {
@@ -394,12 +395,11 @@ fn string_from_u8vec_ntstr1252(arr: &Vec<u8>, start: usize, max_len: usize) -> S
     }
     win1252_decode(&arr[start..end]).unwrap()
 }
-// fn string_from_u8vec_sizestr1252(arr: &Vec<u8>, pos: usize) -> String {
-//     let str_size = usize32_from_u8arr(arr, pos);
-//     let (cow, _, _) = WINDOWS_1252.decode(&arr[pos + SIZE_INT32..pos + SIZE_INT32 + str_size]);
-//     cow.to_string()
-//     // String::from_utf8_lossy(&arr[pos + SIZE_INT32..pos + SIZE_INT32 + str_size]).to_string()
-// }
+#[allow(dead_code)]
+fn string_from_u8vec_sizestr1252(arr: &Vec<u8>, pos: usize) -> String {
+    let str_size = usize32_from_u8arr(arr, pos);
+    win1252_decode(&arr[pos + SIZE_INT32..pos + SIZE_INT32 + str_size]).unwrap()
+}
 
 fn get_global_vars_file_name(buf: &Vec<u8>, pos: usize) -> String {
     let mut file_str_start = pos + 4 + 24;
@@ -490,7 +490,7 @@ impl std::fmt::Debug for FieldType {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self {
             FieldType::NtStr(max_len) => write!(fmt, "FieldType::NtStr (max: {max_len})"),
-            // FieldType::SizeStr => write!(fmt, "FieldType::SizeStr"),
+            FieldType::SizeStr => write!(fmt, "FieldType::SizeStr"),
             FieldType::Function(_) => write!(fmt, "FieldType::Function"),
         }
     }
