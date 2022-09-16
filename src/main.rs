@@ -447,13 +447,13 @@ fn needs_quote_for_yaml(string: &str) -> bool {
 fn win1252_decode(bytes: &[u8]) -> String {
     let mut decoded = String::with_capacity(bytes.len());
     for b in bytes {
-        decoded.push(char::from_u32(WINDOWS_1252_CP[*b as usize] as u32).unwrap());
+        decoded.push(char::from_u32(WINDOWS_1252_CP[*b as usize]).unwrap());
     }
     decoded
 }
 
 // Second half excerpted from encoding_rs
-static WINDOWS_1252_CP: [u16; 256] = [
+static WINDOWS_1252_CP: [u32; 256] = [
     0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007, 0x0008, 0x0009, 0x000A, 0x000B,
     0x000C, 0x000D, 0x000E, 0x000F, 0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017,
     0x0018, 0x0019, 0x001A, 0x001B, 0x001C, 0x001D, 0x001E, 0x001F, 0x0020, 0x0021, 0x0022, 0x0023,
