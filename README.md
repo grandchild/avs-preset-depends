@@ -4,6 +4,7 @@ A CLI tool to scan Winamp AVS presets for any files it might need.
 
 Scan individual files or whole directories.
 
+
 ### Build
 
 Install Rust & Cargo, then:
@@ -11,6 +12,7 @@ Install Rust & Cargo, then:
 ```shell
 cargo build --release
 ```
+
 
 ### Usage
 
@@ -24,6 +26,7 @@ target/release/preset-depends ~/Winamp/Plugins/avs/Me/MyPack/
 ```
 
 If you pass multiple paths, it will output separate lists for each path.
+
 
 #### Example Output
 
@@ -56,11 +59,23 @@ If you pass multiple paths, it will output separate lists for each path.
     - "Holden03: Convolution Filter"
 ```
 
+
 ### Todo
 
 - Translate APE ID strings into `.ape` filenames if available.
 - Make precompiled releases downloadable
-- Allow setting a `Winamp/Plugins/avs` base-dir to find and print full paths for available and warnings for missing files
+- Allow setting a `Winamp/Plugins/avs` base-dir to find and print full paths for
+  available and warnings for missing files
+
+
+### Learning Rust
+
+While this project does serve a useful purpose, it is with _equal_ importance a project
+for learning Rust. I try hard to make the code as idiomatic as possible and to apply
+various parts of the language and libraries. For example the `IterableEnum` trait
+sub-crate is borderline unnecessary but taught me a bit about how to write macros. The
+code should have minimal dependencies and produce the smallest possible binary size.
+
 
 ### License
 
