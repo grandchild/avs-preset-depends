@@ -212,15 +212,7 @@ fn scan_dirs_and_preset_files(
         return resources;
     } else {
         let file_path_str = match file_path.to_str() {
-            None => match win1252_decode(&file_path.as_os_str().as_bytes()) {
-                None => {
-                    eprintln!(
-                        "Path is neither UTF-8- nor Windows1252-/latin1-encoded {file_path:?}"
-                    );
-                    return HashSet::new();
-                }
-                Some(path) => path,
-            },
+            None => win1252_decode(&file_path.as_os_str().as_bytes()),
             Some(string) => string.to_string(),
         };
         if file_path_str.ends_with(".avs") {
@@ -393,12 +385,12 @@ fn string_from_u8vec_ntstr1252(arr: &Vec<u8>, start: usize, max_len: usize) -> S
             break;
         }
     }
-    win1252_decode(&arr[start..end]).unwrap()
+    win1252_decode(&arr[start..end])
 }
 #[allow(dead_code)]
 fn string_from_u8vec_sizestr1252(arr: &Vec<u8>, pos: usize) -> String {
     let str_size = usize32_from_u8arr(arr, pos);
-    win1252_decode(&arr[pos + SIZE_INT32..pos + SIZE_INT32 + str_size]).unwrap()
+    win1252_decode(&arr[pos + SIZE_INT32..pos + SIZE_INT32 + str_size])
 }
 
 fn get_global_vars_file_name(buf: &Vec<u8>, pos: usize) -> String {
@@ -452,12 +444,12 @@ fn needs_quote_for_yaml(string: &str) -> bool {
             .contains(&string.to_lowercase().as_str())
 }
 
-fn win1252_decode(bytes: &[u8]) -> Option<String> {
+fn win1252_decode(bytes: &[u8]) -> String {
     let mut decoded = String::with_capacity(bytes.len());
     for b in bytes {
-        decoded.push(char::from_u32(WINDOWS_1252_CP[*b as usize] as u32)?);
+        decoded.push(char::from_u32(WINDOWS_1252_CP[*b as usize] as u32).unwrap());
     }
-    Some(decoded)
+    decoded
 }
 
 // Second half excerpted from encoding_rs
