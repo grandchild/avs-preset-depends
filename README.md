@@ -45,15 +45,15 @@ If you pass multiple paths, it will output separate lists for each path.
   APEs:
     - Channel Shift
     - Color Map
-    - Holden04: Video Delay
-    - Holden03: Convolution Filter
-    - Acko.net: Texer II
+    - "Holden04: Video Delay"
+    - "Holden03: Convolution Filter"
+    - "Acko.net: Texer II"
 /home/me/Winamp/Plugins/avs/VISBOT/VC017/01 skupers - same old intro.avs:
   Images:
     - vb.bmp
   APEs:
     - Color Map
-    - Holden03: Convolution Filter
+    - "Holden03: Convolution Filter"
 ```
 
 ### Todo
