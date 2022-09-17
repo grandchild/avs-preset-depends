@@ -1,5 +1,5 @@
+use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::env;
 use std::fs::metadata;
 use std::fs::read_dir;
@@ -22,7 +22,7 @@ static AVS_EL28_HEADER_LEN: usize = AVS_EL28_HEADER.len();
 const SIZE_INT32: usize = (i32::BITS / 8) as usize;
 const WIN32_MAX_PATH: usize = 260;
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy)]
+#[derive(Hash, Eq, PartialEq, Clone, Copy)]
 enum CompID {
     Builtin(i32),
     Ape([u8; AVS_APE_ID_LEN]),
@@ -34,7 +34,7 @@ enum FieldType {
     SizeStr,
     Function(fn(&Vec<u8>, usize) -> String),
 }
-#[derive(Eq, Hash, PartialEq, Clone, Copy, IterableEnum)]
+#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, IterableEnum)]
 enum ResourceType {
     Image,
     Video,
@@ -58,7 +58,7 @@ struct ResourceSpec {
     rtype: ResourceType,
     empty_significance: Empty,
 }
-#[derive(Eq, Hash, PartialEq, Clone)]
+#[derive(Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
 struct Resource {
     string: String,
     rtype: ResourceType,
@@ -187,9 +187,9 @@ fn main() {
 fn scan_dirs_and_preset_files(
     file_path: &Path,
     resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> HashSet<Resource> {
+) -> BTreeSet<Resource> {
     if file_path.is_dir() {
-        let mut resources: HashSet<Resource> = HashSet::new();
+        let mut resources: BTreeSet<Resource> = BTreeSet::new();
         let dir_listing = match read_dir(file_path) {
             Err(why) => {
                 eprintln!("Cannot list directory {file_path:?} ({why})");
@@ -218,7 +218,7 @@ fn scan_dirs_and_preset_files(
         if file_path_str.ends_with(".avs") {
             return scan_preset_file(file_path, &file_path_str, resource_specs);
         }
-        return HashSet::new();
+        return BTreeSet::new();
     }
 }
 
@@ -226,8 +226,8 @@ fn scan_preset_file(
     file_path: &Path,
     file_path_str: &String,
     resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> HashSet<Resource> {
-    let empty = HashSet::new();
+) -> BTreeSet<Resource> {
+    let empty = BTreeSet::new();
     let mut preset_file = match File::open(file_path) {
         Err(why) => {
             eprintln!("Cannot open file {file_path_str:?} ({why})");
@@ -276,8 +276,8 @@ fn scan_components(
     max_pos: usize,
     file_path_str: &String,
     resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> HashSet<Resource> {
-    let mut resources = HashSet::new();
+) -> BTreeSet<Resource> {
+    let mut resources = BTreeSet::new();
     while pos < max_pos {
         let (len, id) = match get_component_len_and_id(&buf, pos) {
             Err(_why) => break,

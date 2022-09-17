@@ -39,18 +39,18 @@ If you pass multiple paths, it will output separate lists for each path.
 /home/me/Winamp/Plugins/avs/zamuz - visions five:
   Images:
     - v4_texer7.bmp
-    - v5_texer1.bmp
     - v5_circle.bmp
+    - v5_circle2.bmp
+    - V5_intro2.bmp
     - V5_intro4.bmp
     - v5_square.bmp
-    - V5_intro2.bmp
-    - v5_circle2.bmp
+    - v5_texer1.bmp
   APEs:
+    - "Acko.net: Texer II"
     - Channel Shift
     - Color Map
-    - "Holden04: Video Delay"
     - "Holden03: Convolution Filter"
-    - "Acko.net: Texer II"
+    - "Holden04: Video Delay"
 /home/me/Winamp/Plugins/avs/VISBOT/VC017/01 skupers - same old intro.avs:
   Images:
     - vb.bmp
