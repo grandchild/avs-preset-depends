@@ -1,6 +1,5 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn;
 
 #[proc_macro_derive(IterableEnum)]
 pub fn iterable_enum_derive(input: TokenStream) -> TokenStream {
