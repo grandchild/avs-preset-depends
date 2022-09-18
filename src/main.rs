@@ -32,7 +32,7 @@ enum FieldType {
     NtStr(/*max_len*/ usize),
     #[allow(dead_code)]
     SizeStr,
-    Function(fn(&Vec<u8>, usize) -> String),
+    Function(fn(&[u8], usize) -> String),
 }
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, IterableEnum)]
 enum ResourceType {
@@ -44,11 +44,11 @@ enum ResourceType {
     GenericFile,
 }
 #[derive(Clone, Copy)]
-enum Empty {
-    IsDefault,
-    IsCommon,
-    IsRare,
-    IsError,
+enum EmptyIs {
+    Default,
+    Common,
+    Rare,
+    Error,
 }
 #[derive(Clone, Copy)]
 struct ResourceSpec {
@@ -56,7 +56,7 @@ struct ResourceSpec {
     offset: usize,
     ftype: FieldType,
     rtype: ResourceType,
-    empty_significance: Empty,
+    empty_significance: EmptyIs,
 }
 #[derive(Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
 struct Resource {
@@ -72,7 +72,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             offset: 0,
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Dll,
-            empty_significance: Empty::IsRare,
+            empty_significance: EmptyIs::Rare,
         },
     ),
     (
@@ -82,7 +82,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             offset: 132,
             ftype: FieldType::NtStr(32),
             rtype: ResourceType::Font,
-            empty_significance: Empty::IsDefault,
+            empty_significance: EmptyIs::Default,
         },
     ),
     (
@@ -92,7 +92,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             offset: 12,
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Video,
-            empty_significance: Empty::IsError,
+            empty_significance: EmptyIs::Error,
         },
     ),
     (
@@ -102,7 +102,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             offset: 20,
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
-            empty_significance: Empty::IsError,
+            empty_significance: EmptyIs::Error,
         },
     ),
     (
@@ -112,7 +112,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             offset: 16,
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
-            empty_significance: Empty::IsDefault,
+            empty_significance: EmptyIs::Default,
         },
     ),
     (
@@ -122,7 +122,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             offset: 4,
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
-            empty_significance: Empty::IsDefault,
+            empty_significance: EmptyIs::Default,
         },
     ),
     (
@@ -132,7 +132,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             offset: 0,
             ftype: FieldType::NtStr(256),
             rtype: ResourceType::Video,
-            empty_significance: Empty::IsError,
+            empty_significance: EmptyIs::Error,
         },
     ),
     (
@@ -142,7 +142,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             offset: 0xBAD0FF5E7,
             ftype: FieldType::Function(get_global_vars_file_name),
             rtype: ResourceType::GenericFile,
-            empty_significance: Empty::IsCommon,
+            empty_significance: EmptyIs::Common,
         },
     ),
     (
@@ -152,7 +152,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             offset: 0,
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
-            empty_significance: Empty::IsError,
+            empty_significance: EmptyIs::Error,
         },
     ),
 ];
@@ -171,7 +171,7 @@ fn main() {
                         println!("  {t}s:");
                         section_header_printed = true;
                     }
-                    if needs_quote_for_yaml(&string) {
+                    if needs_quote_for_yaml(string) {
                         let escaped_string = string.escape_default();
                         println!("    - \"{escaped_string}\"");
                     } else {
@@ -208,16 +208,16 @@ fn scan_dirs_and_preset_files(
                 }
             }
         }
-        return resources;
+        resources
     } else {
         let file_path_str = match file_path.to_str() {
-            None => win1252_decode(&file_path.as_os_str().as_bytes()),
+            None => win1252_decode(file_path.as_os_str().as_bytes()),
             Some(string) => string.to_string(),
         };
         if file_path_str.ends_with(".avs") {
             return scan_preset_file(file_path, &file_path_str, resource_specs);
         }
-        return BTreeSet::new();
+        BTreeSet::new()
     }
 }
 
@@ -278,7 +278,7 @@ fn scan_components(
 ) -> BTreeSet<Resource> {
     let mut resources = BTreeSet::new();
     while pos < max_pos {
-        let (len, id) = match get_component_len_and_id(&buf, pos) {
+        let (len, id) = match get_component_len_and_id(buf, pos) {
             Err(_why) => break,
             Ok((len, id)) => (len, id),
         };
@@ -306,7 +306,7 @@ fn scan_components(
                     FieldType::Function(f) => f(buf, pos),
                 };
                 if string.is_empty() {
-                    if let Empty::IsError | Empty::IsRare = spec.empty_significance {
+                    if let EmptyIs::Error | EmptyIs::Rare = spec.empty_significance {
                         eprintln!(
                             "{} {} is empty in '{file_path_str}' @0x{pos:x}",
                             spec.name, spec.rtype,
@@ -320,8 +320,8 @@ fn scan_components(
                     });
                 }
             }
-            None => match id {
-                CompID::Builtin(-2) => {
+            None => {
+                if let CompID::Builtin(-2) = id {
                     let mut offset = pos;
                     offset += (buf[offset + 4] as usize) + 1; // config
                     if buf.len() > offset + AVS_EL28_HEADER_LEN {
@@ -336,8 +336,7 @@ fn scan_components(
                     resources = &resources
                         | &scan_components(buf, offset, pos + len, file_path_str, resource_specs);
                 }
-                _ => {}
-            },
+            }
         }
         pos += len;
     }
@@ -364,16 +363,16 @@ fn get_component_len_and_id(
     Ok((component_len, id))
 }
 
-fn i32_from_u8arr(arr: &Vec<u8>, pos: usize) -> i32 {
+fn i32_from_u8arr(arr: &[u8], pos: usize) -> i32 {
     i32::from_le_bytes(arr[pos..pos + SIZE_INT32].try_into().unwrap())
 }
-fn usize32_from_u8arr(arr: &Vec<u8>, pos: usize) -> usize {
+fn usize32_from_u8arr(arr: &[u8], pos: usize) -> usize {
     u32::from_le_bytes(arr[pos..pos + SIZE_INT32].try_into().unwrap()) as usize
 }
-fn u8arr_fixed_slice<const LENGTH: usize>(arr: &Vec<u8>, pos: usize) -> &[u8; LENGTH] {
+fn u8arr_fixed_slice<const LENGTH: usize>(arr: &[u8], pos: usize) -> &[u8; LENGTH] {
     arr[pos..pos + LENGTH].try_into().unwrap()
 }
-fn string_from_u8vec_ntstr1252(arr: &Vec<u8>, start: usize, max_len: usize) -> String {
+fn string_from_u8vec_ntstr1252(arr: &[u8], start: usize, max_len: usize) -> String {
     let mut end: usize = start;
     loop {
         match arr[end] {
@@ -387,12 +386,12 @@ fn string_from_u8vec_ntstr1252(arr: &Vec<u8>, start: usize, max_len: usize) -> S
     win1252_decode(&arr[start..end])
 }
 #[allow(dead_code)]
-fn string_from_u8vec_sizestr1252(arr: &Vec<u8>, pos: usize) -> String {
+fn string_from_u8vec_sizestr1252(arr: &[u8], pos: usize) -> String {
     let str_size = usize32_from_u8arr(arr, pos);
     win1252_decode(&arr[pos + SIZE_INT32..pos + SIZE_INT32 + str_size])
 }
 
-fn get_global_vars_file_name(buf: &Vec<u8>, pos: usize) -> String {
+fn get_global_vars_file_name(buf: &[u8], pos: usize) -> String {
     let mut file_str_start = pos + 4 + 24;
     // Init, Frame, Beat
     for _ in 0..3 {
@@ -434,10 +433,7 @@ fn needs_quote_for_yaml(string: &str) -> bool {
     is_number
         || string.starts_with(special_start_chars)
         || string.contains(": ")
-        || string.contains(|c: char| match c {
-            '\0'..='\x1f' => true,
-            _ => false,
-        })
+        || string.contains(|c: char| matches!(c, '\0'..='\x1f'))
         || string.ends_with([' ', ':'])
         || ["yes", "no", "true", "false", "on", "off", "null", "~"]
             .contains(&string.to_lowercase().as_str())
@@ -494,7 +490,7 @@ impl std::fmt::Debug for CompID {
             CompID::Ape(id) => write!(
                 fmt,
                 "APE '{}'",
-                string_from_u8vec_ntstr1252(&id.to_vec(), 0, AVS_APE_ID_LEN)
+                string_from_u8vec_ntstr1252(id.as_ref(), 0, AVS_APE_ID_LEN)
             ),
         }
     }
