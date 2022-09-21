@@ -85,9 +85,16 @@ enum FieldType {
     /// here do that, but future changes might use it.
     #[allow(dead_code)]
     SizeStr,
+}
+/// The offset into the effect save data where the resource string starts. Usually a
+/// static offset from the start, but some effects are more complicated.
+#[derive(Clone, Copy)]
+enum FieldOffset {
+    /// A static offset into the buffer, relative to the effect's starting position.
+    Constant(usize),
     /// A resource might be at a non-constant offset. Then a function can be given to
-    /// retrieve it with more flexibility.
-    Function(fn(&[u8], usize) -> String),
+    /// retrieve its offset with more flexibility.
+    Function(fn(&[u8], usize) -> usize),
 }
 /// The type of the resource pointed to.
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, IterableEnum)]
@@ -125,7 +132,7 @@ struct ResourceSpec {
     /// The effects display name.
     name: &'static str,
     /// The offset into the effect's save data where the resource string starts.
-    offset: usize,
+    offset: FieldOffset,
     /// The shape of the resource string.
     ftype: FieldType,
     /// The type of the retrieved resource.
@@ -151,7 +158,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
         CompID::Builtin(10),
         ResourceSpec {
             name: "SVP",
-            offset: 0,
+            offset: FieldOffset::Constant(0),
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Dll,
             empty_significance: EmptyIs::Rare,
@@ -161,7 +168,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
         CompID::Builtin(28),
         ResourceSpec {
             name: "Text",
-            offset: 132,
+            offset: FieldOffset::Constant(132),
             ftype: FieldType::NtStr(32),
             rtype: ResourceType::Font,
             empty_significance: EmptyIs::Default,
@@ -171,7 +178,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
         CompID::Builtin(32),
         ResourceSpec {
             name: "AVI",
-            offset: 12,
+            offset: FieldOffset::Constant(12),
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Video,
             empty_significance: EmptyIs::Error,
@@ -181,7 +188,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
         CompID::Builtin(34),
         ResourceSpec {
             name: "Picture",
-            offset: 20,
+            offset: FieldOffset::Constant(20),
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
             empty_significance: EmptyIs::Error,
@@ -191,7 +198,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
         CompID::Ape(*b"Texer\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
         ResourceSpec {
             name: "Texer",
-            offset: 16,
+            offset: FieldOffset::Constant(16),
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
             empty_significance: EmptyIs::Default,
@@ -201,7 +208,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
         CompID::Ape(*b"Acko.net: Texer II\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
         ResourceSpec {
             name: "Texer II",
-            offset: 4,
+            offset: FieldOffset::Constant(4),
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
             empty_significance: EmptyIs::Default,
@@ -211,7 +218,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
         CompID::Ape(*b"VFX AVI PLAYER\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
         ResourceSpec {
             name: "AVI Player",
-            offset: 0,
+            offset: FieldOffset::Constant(0),
             ftype: FieldType::NtStr(256),
             rtype: ResourceType::Video,
             empty_significance: EmptyIs::Error,
@@ -221,8 +228,8 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
         CompID::Ape(*b"Jheriko: Global\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
         ResourceSpec {
             name: "Global Variables",
-            offset: 0xBAD0FF5E7,
-            ftype: FieldType::Function(get_global_vars_file_name),
+            offset: FieldOffset::Function(get_globalvars_filename_offset),
+            ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::GenericFile,
             empty_significance: EmptyIs::Common,
         },
@@ -231,7 +238,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
         CompID::Ape(*b"Picture II\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"),
         ResourceSpec {
             name: "Picture II",
-            offset: 0,
+            offset: FieldOffset::Constant(0),
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
             empty_significance: EmptyIs::Error,
@@ -390,14 +397,17 @@ fn scan_components(
         };
         match resource_specs.get(&id) {
             Some(spec) => {
+                let offset = match spec.offset {
+                    FieldOffset::Constant(offset) => offset,
+                    FieldOffset::Function(offset_func) => offset_func(buf, pos),
+                };
                 let string = match spec.ftype {
                     FieldType::NtStr(max_len) => {
-                        string_from_u8vec_ntstr1252(buf, pos + spec.offset, max_len)
+                        string_from_u8vec_ntstr1252(buf, pos + offset, max_len)
                     }
                     FieldType::SizeStr => {
-                        string_from_u8vec_sizestr1252(buf, pos + spec.offset)
+                        string_from_u8vec_sizestr1252(buf, pos + offset)
                     }
-                    FieldType::Function(f) => f(buf, pos),
                 };
                 if string.is_empty() {
                     if let EmptyIs::Error | EmptyIs::Rare = spec.empty_significance {
@@ -516,8 +526,8 @@ fn string_from_u8vec_sizestr1252(arr: &[u8], pos: usize) -> String {
 ///
 /// The offset of the filename depends on the size of the other code fields, so scan
 /// through Init, Frame and Beat code strings first, and return the string after them.
-fn get_global_vars_file_name(buf: &[u8], pos: usize) -> String {
-    let mut file_str_start = pos + 4 + 24;
+fn get_globalvars_filename_offset(buf: &[u8], pos: usize) -> usize {
+    let mut file_str_start: usize = pos + 4 + 24;
     for _ in ["Init", "Frame", "Beat"] {
         loop {
             match buf[file_str_start] {
@@ -529,7 +539,7 @@ fn get_global_vars_file_name(buf: &[u8], pos: usize) -> String {
             }
         }
     }
-    string_from_u8vec_ntstr1252(buf, file_str_start, WIN32_MAX_PATH)
+    file_str_start - pos
 }
 
 /// Add quotes around the string and escapes as needed if the string would otherwise
@@ -619,7 +629,6 @@ impl std::fmt::Debug for FieldType {
                 write!(fmt, "FieldType::NtStr (max: {max_len})")
             }
             FieldType::SizeStr => write!(fmt, "FieldType::SizeStr"),
-            FieldType::Function(_) => write!(fmt, "FieldType::Function"),
         }
     }
 }
