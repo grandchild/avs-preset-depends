@@ -1,3 +1,22 @@
+/*!
+A CLI tool to scan Winamp AVS presets for any files it might need.
+
+Scan individual files or whole directories.
+
+Usage examples:
+```shell
+preset-depends preset.avs
+```
+or
+```shell
+preset-depends ~/Winamp/Plugins/avs/Me/MyPack/
+```
+
+The output is a map of resource types each with a list of individual resources, in YAML
+format.
+*/
+#![warn(clippy::missing_docs_in_private_items)]
+
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::env;
@@ -12,58 +31,121 @@ mod iterable_enum;
 use iterable_enum::IterableEnum;
 use iterable_enum_derive::IterableEnum;
 
+/// Ancient AVS preset file magic.
 static AVS_HEADER_01: &[u8] = b"Nullsoft AVS Preset 0.1\x1a";
+/// Latest AVS preset file magic.
 static AVS_HEADER_02: &[u8] = b"Nullsoft AVS Preset 0.2\x1a";
+/// Length of the AVS preset file magic.
 static AVS_HEADER_LEN: usize = AVS_HEADER_02.len();
-const AVS_APE_SEPARATOR: i32 = 0x4000;
+/// Builtin IDs must be lower than this. In a save section for an APE this must be
+/// equal or larger that this.
+///
+/// APE ID strings start at the position of the effect ID. And by virtue of the first 4
+/// chars/bytes of the string when interpreted(!) as i32 being higher than this, APEs
+/// can be distinguished. Yes this is extremely hacky, and you could break it by
+/// creating an APE with a one-character or special two-character ID string. But who
+/// would do such a thing!
+const AVS_APE_SEPARATOR: i32 = 0x00004000;
+/// The maximum length of an APE ID string.
+///
+/// Actual IDs are all shorter, and the rest is filled with zero.
 const AVS_APE_ID_LEN: usize = 32;
+/// Effect List "APE" Header.
+///
+/// Modern Effect Lists contain this "APE" as a first member which is then merged into
+/// the Effect List itself.
 static AVS_EL28_HEADER: &[u8] = b"\0@\0\0AVS 2.8+ Effect List Config\0\0\0\0\0";
+/// Length of the Effect List "APE" Header.
 static AVS_EL28_HEADER_LEN: usize = AVS_EL28_HEADER.len();
+/// Length of a i32 in bytes.
 const SIZE_INT32: usize = (i32::BITS / 8) as usize;
+/// Maximum length of path strings in old Windows versions. `"C:\"` + 256 path chars +
+/// `'\0'`.
 const WIN32_MAX_PATH: usize = 260;
 
+/// The ID of an effect. Either an int32 for builtin effects or a string for plugin
+/// ("APE") effects.
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 enum CompID {
+    /// Builtin IDs range from 0 to ~45, with two special values: -2 for Effect List
+    /// (the only component which can have child components) and -1 for an unknown
+    /// effect.
     Builtin(i32),
+    /// The string field for APEs in a preset file is always 32 chars, with unneeded
+    /// trailing chars filled with zero.
     Ape([u8; AVS_APE_ID_LEN]),
 }
+/// The data shape of the resource field in the effect.
 #[derive(Clone, Copy)]
 enum FieldType {
+    /// All currently implemented resources are null-terminated strings with a maximum
+    /// string length
     NtStr(/*max_len*/ usize),
+    /// Some AVS effects use size-prefixed strings but none of the effects scanned for
+    /// here do that, but future changes might use it.
     #[allow(dead_code)]
     SizeStr,
+    /// A resource might be at a non-constant offset. Then a function can be given to
+    /// retrieve it with more flexibility.
     Function(fn(&[u8], usize) -> String),
 }
+/// The type of the resource pointed to.
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, IterableEnum)]
 enum ResourceType {
+    /// An image file.
     Image,
+    /// A video file.
     Video,
+    /// A plugin-effect (APE) identifier. This is not the `.ape` filename.
     Ape,
+    /// A font name.
     Font,
+    /// A Sonique Visualization Plugin effect DLL.
     Dll,
+    /// Any other file (currently only GlobalVariables' code includes).
     GenericFile,
 }
+/// The significance of an empty resource field.
 #[derive(Clone, Copy)]
 enum EmptyIs {
+    /// An empty resource will use the baked-in default resource (e.g. _TexerII_ image).
     Default,
+    /// Setting a resource is optional and not having one is common.
     Common,
+    /// An effect will do nothing without a resource, but it happens often enough.
+    /// (Currently this just behaves the same as `Error` and is only a hint.)
     Rare,
+    /// An effect will do nothing without a resource. Print the offending preset and
+    /// file position to stderr.
     Error,
 }
+/// Name of the effect and where to find its resource.
 #[derive(Clone, Copy)]
 struct ResourceSpec {
+    /// The effects display name.
     name: &'static str,
+    /// The offset into the effect's save data where the resource string starts.
     offset: usize,
+    /// The shape of the resource string.
     ftype: FieldType,
+    /// The type of the retrieved resource.
     rtype: ResourceType,
+    /// What does not finding a resource mean?
     empty_significance: EmptyIs,
 }
+/// The value and type of a resource.
 #[derive(Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
 struct Resource {
+    /// The filename or other name of a resource.
     string: String,
+    /// The type of the resource pointed to.
     rtype: ResourceType,
 }
 
+/// A list of selected AVS effects with resources, keyed by their `CompID`s.
+///
+/// This list of tuples will be turned into a [HashMap] at the beginning of [main],
+/// because they can't be statically initialized in Rust (yet?).
 static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
     (
         CompID::Builtin(10),
@@ -157,6 +239,10 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
     ),
 ];
 
+/// Treat each arguments as a filesystem path and collect and print all resources from
+/// any AVS preset file found.
+///
+/// Within each path, sort all resources into sections given by the[ResourceType] enum.
 fn main() {
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
     let args: Vec<String> = env::args().collect();
@@ -178,6 +264,10 @@ fn main() {
     }
 }
 
+/// Check if the given path is an AVS file or a directory, collect resources therein
+/// (in case of directories recursively) and return them.
+///
+/// In case of any permission errors return the empty set.
 fn scan_dirs_and_preset_files(
     file_path: &Path,
     resource_specs: &HashMap<CompID, ResourceSpec>,
@@ -216,6 +306,9 @@ fn scan_dirs_and_preset_files(
     }
 }
 
+/// Return a set of all resources referenced in the preset.
+///
+/// If the preset file is inaccessible or invalid return the empty set.
 fn scan_preset_file(
     file_path: &Path,
     file_path_str: &String,
@@ -264,6 +357,9 @@ fn scan_preset_file(
     )
 }
 
+/// Recursively walk the preset tree and find any effects that have resources.
+///
+/// Return any resources found, or the empty set.
 fn scan_components(
     buf: &Vec<u8>,
     mut pos: usize,
@@ -347,6 +443,14 @@ fn scan_components(
     resources
 }
 
+/// Decode the byte array at `pos` as an AVS effect ID and its serialized length.
+///
+/// Every preset starts with its ID (either a i32 or APE ID string, see [CompID] for
+/// details) followed by the length of the effect's section in the preset file.
+///
+/// The distinction between builtin effect and APE is done by comparison to
+/// [AVS_APE_SEPARATOR]. If the `ID >= AVS_APE_SEPARATOR` then the data starting at
+/// the _same_ position is evaluated as ASCII string, which is the APE ID.
 fn get_component_len_and_id(
     buf: &Vec<u8>,
     mut pos: usize,
@@ -369,15 +473,25 @@ fn get_component_len_and_id(
     Ok((component_len, id))
 }
 
+/// Decode 4 bytes of the byte array starting at `pos` as a signed 32bit integer.
 fn i32_from_u8arr(arr: &[u8], pos: usize) -> i32 {
     i32::from_le_bytes(arr[pos..pos + SIZE_INT32].try_into().unwrap())
 }
+/// Decode 4 bytes of the byte array starting at `pos` as an unsigned 32-bit integer.
+///
+/// Cast to usize is safe, because currently Rust has no target platforms of less than
+/// 32bit width.
 fn usize32_from_u8arr(arr: &[u8], pos: usize) -> usize {
     u32::from_le_bytes(arr[pos..pos + SIZE_INT32].try_into().unwrap()) as usize
 }
+/// Turn a slice of a byte array into a fixed-size array.
+///
+/// Needed to type-correctly compare a section of the preset file contents with the
+/// static fixed-size APE ID strings.
 fn u8arr_fixed_slice<const LENGTH: usize>(arr: &[u8], pos: usize) -> &[u8; LENGTH] {
     arr[pos..pos + LENGTH].try_into().unwrap()
 }
+/// Decode the byte array starting at `pos` as a null-terminated string.
 fn string_from_u8vec_ntstr1252(arr: &[u8], start: usize, max_len: usize) -> String {
     let mut end: usize = start;
     loop {
@@ -391,12 +505,17 @@ fn string_from_u8vec_ntstr1252(arr: &[u8], start: usize, max_len: usize) -> Stri
     }
     win1252_decode(&arr[start..end])
 }
+/// Decode the byte array starting at `pos` as a size-prefixed string.
 #[allow(dead_code)]
 fn string_from_u8vec_sizestr1252(arr: &[u8], pos: usize) -> String {
     let str_size = usize32_from_u8arr(arr, pos);
     win1252_decode(&arr[pos + SIZE_INT32..pos + SIZE_INT32 + str_size])
 }
 
+/// Return the code include filename for the GlobalVariables APE effect.
+///
+/// The offset of the filename depends on the size of the other code fields, so scan
+/// through Init, Frame and Beat code strings first, and return the string after them.
 fn get_global_vars_file_name(buf: &[u8], pos: usize) -> String {
     let mut file_str_start = pos + 4 + 24;
     for _ in ["Init", "Frame", "Beat"] {
@@ -413,6 +532,8 @@ fn get_global_vars_file_name(buf: &[u8], pos: usize) -> String {
     string_from_u8vec_ntstr1252(buf, file_str_start, WIN32_MAX_PATH)
 }
 
+/// Add quotes around the string and escapes as needed if the string would otherwise
+/// violate YAML's requirements for a bare string. If not, return the string unchanged.
 fn quote_yaml_string_if_needed(string: &str) -> String {
     if string.is_empty() {
         return string.to_string();
@@ -450,6 +571,8 @@ fn quote_yaml_string_if_needed(string: &str) -> String {
     }
 }
 
+/// Decode a byte array into a [String](std::string::String) assuming a Windows1252
+/// encoding.
 fn win1252_decode(bytes: &[u8]) -> String {
     let mut decoded = String::with_capacity(bytes.len());
     for b in bytes {
