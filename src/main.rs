@@ -399,8 +399,7 @@ fn string_from_u8vec_sizestr1252(arr: &[u8], pos: usize) -> String {
 
 fn get_global_vars_file_name(buf: &[u8], pos: usize) -> String {
     let mut file_str_start = pos + 4 + 24;
-    // Init, Frame, Beat
-    for _ in 0..3 {
+    for _ in ["Init", "Frame", "Beat"] {
         loop {
             match buf[file_str_start] {
                 1.. => file_str_start += 1,
