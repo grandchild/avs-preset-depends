@@ -162,7 +162,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     for arg in &args[1..] {
         let resources = &scan_dirs_and_preset_files(Path::new(&arg), &resource_specs);
-        println!("{arg}:");
+        println!("{}:", quote_yaml_string_if_needed(arg));
         for t in ResourceType::items() {
             let mut section_header_printed = false;
             for Resource { string, rtype } in resources {
@@ -171,12 +171,7 @@ fn main() {
                         println!("  {t}s:");
                         section_header_printed = true;
                     }
-                    if needs_quote_for_yaml(string) {
-                        let escaped_string = string.escape_default();
-                        println!("    - \"{escaped_string}\"");
-                    } else {
-                        println!("    - {string}");
-                    }
+                    println!("    - {}", quote_yaml_string_if_needed(string));
                 }
             }
         }
@@ -408,9 +403,9 @@ fn get_global_vars_file_name(buf: &[u8], pos: usize) -> String {
     string_from_u8vec_ntstr1252(buf, file_str_start, WIN32_MAX_PATH)
 }
 
-fn needs_quote_for_yaml(string: &str) -> bool {
+fn quote_yaml_string_if_needed(string: &str) -> String {
     if string.is_empty() {
-        return true;
+        return string.to_string();
     }
     let mut is_number = true;
     let mut no_number_separator_yet = true;
@@ -430,13 +425,18 @@ fn needs_quote_for_yaml(string: &str) -> bool {
     let special_start_chars = [
         '.', '&', '*', '?', '|', '-', '<', '>', '=', '!', '%', '@', '`', '{', '[', '\'', ' ', '#',
     ];
-    is_number
+    if is_number
         || string.starts_with(special_start_chars)
         || string.contains(": ")
         || string.contains(|c: char| matches!(c, '\0'..='\x1f'))
         || string.ends_with([' ', ':'])
         || ["yes", "no", "true", "false", "on", "off", "null", "~"]
             .contains(&string.to_lowercase().as_str())
+    {
+        format!("\"{}\"", string.escape_default())
+    } else {
+        string.to_string()
+    }
 }
 
 fn win1252_decode(bytes: &[u8]) -> String {
