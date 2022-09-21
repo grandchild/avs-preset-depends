@@ -139,6 +139,8 @@ struct ResourceSpec {
     rtype: ResourceType,
     /// What does not finding a resource mean?
     empty_significance: EmptyIs,
+    /// A value to disregard and treat as empty.
+    treat_as_empty: Option<&'static str>,
 }
 /// The value and type of a resource.
 #[derive(Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
@@ -162,6 +164,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Dll,
             empty_significance: EmptyIs::Rare,
+            treat_as_empty: None,
         },
     ),
     (
@@ -172,6 +175,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             ftype: FieldType::NtStr(32),
             rtype: ResourceType::Font,
             empty_significance: EmptyIs::Default,
+            treat_as_empty: None,
         },
     ),
     (
@@ -182,6 +186,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Video,
             empty_significance: EmptyIs::Error,
+            treat_as_empty: None,
         },
     ),
     (
@@ -192,6 +197,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
             empty_significance: EmptyIs::Error,
+            treat_as_empty: None,
         },
     ),
     (
@@ -202,6 +208,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
             empty_significance: EmptyIs::Default,
+            treat_as_empty: None,
         },
     ),
     (
@@ -212,6 +219,9 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
             empty_significance: EmptyIs::Default,
+            // A few rare presets have, through some bug, saved a literal
+            // '(default image)' as image filename.
+            treat_as_empty: Some("(default image)"),
         },
     ),
     (
@@ -222,6 +232,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             ftype: FieldType::NtStr(256),
             rtype: ResourceType::Video,
             empty_significance: EmptyIs::Error,
+            treat_as_empty: None,
         },
     ),
     (
@@ -232,6 +243,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::GenericFile,
             empty_significance: EmptyIs::Common,
+            treat_as_empty: None,
         },
     ),
     (
@@ -242,6 +254,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
             ftype: FieldType::NtStr(WIN32_MAX_PATH),
             rtype: ResourceType::Image,
             empty_significance: EmptyIs::Error,
+            treat_as_empty: None,
         },
     ),
 ];
@@ -417,7 +430,7 @@ fn scan_components(
                         )
                     }
                 }
-                if !string.is_empty() {
+                if !string.is_empty() && Some(string.as_str()) != spec.treat_as_empty {
                     resources.insert(Resource {
                         string,
                         rtype: spec.rtype,
