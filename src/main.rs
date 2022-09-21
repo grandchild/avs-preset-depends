@@ -594,8 +594,7 @@ fn quote_yaml_string_if_needed(string: &str) -> String {
     }
 }
 
-/// Decode a byte array into a [String](std::string::String) assuming a Windows1252
-/// encoding.
+/// Decode a byte array into a [String] assuming a Windows1252 encoding.
 fn win1252_decode(bytes: &[u8]) -> String {
     let mut decoded = String::with_capacity(bytes.len());
     for b in bytes {
