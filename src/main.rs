@@ -478,13 +478,17 @@ fn get_component_len_and_id(
     buf: &Vec<u8>,
     mut pos: usize,
 ) -> Result<(usize, CompID), &'static str> {
-    if pos + SIZE_INT32 >= buf.len() {
+    if pos + SIZE_INT32 * 2 > buf.len() {
         return Err("Preset ended prematurely");
     }
     let component_code = i32_from_u8arr(buf, pos);
     pos += SIZE_INT32;
     let id = match component_code {
         AVS_APE_SEPARATOR.. => {
+            if pos + SIZE_INT32 + AVS_APE_ID_LEN > buf.len() {
+                println!("{}, {}", pos + AVS_APE_ID_LEN, buf.len());
+                return Err("Preset ended prematurely");
+            }
             CompID::Ape(*u8arr_fixed_slice::<AVS_APE_ID_LEN>(buf, pos))
         }
         _ => CompID::Builtin(component_code),
