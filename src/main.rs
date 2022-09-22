@@ -37,14 +37,10 @@ static AVS_HEADER_01: &[u8] = b"Nullsoft AVS Preset 0.1\x1a";
 static AVS_HEADER_02: &[u8] = b"Nullsoft AVS Preset 0.2\x1a";
 /// Length of the AVS preset file magic.
 static AVS_HEADER_LEN: usize = AVS_HEADER_02.len();
-/// Builtin IDs must be lower than this. In a save section for an APE this must be
-/// equal or larger that this.
+/// Builtin IDs must be lower than this. To mark a section as an APE section the ID must
+/// be equal to or larger that this.
 ///
-/// APE ID strings start at the position of the effect ID. And by virtue of the first 4
-/// chars/bytes of the string when interpreted(!) as i32 being higher than this, APEs
-/// can be distinguished. Yes this is extremely hacky, and you could break it by
-/// creating an APE with a one-character or special two-character ID string. But who
-/// would do such a thing!
+/// The APE ID _string_ starts after this ID.
 const AVS_APE_SEPARATOR: i32 = 0x00004000;
 /// The maximum length of an APE ID string.
 ///
@@ -69,7 +65,7 @@ const WIN32_MAX_PATH: usize = 260;
 enum CompID {
     /// Builtin IDs range from 0 to ~45, with two special values: -2 for Effect List
     /// (the only component which can have child components) and -1 for an unknown
-    /// effect.
+    /// effect. Builtin IDs must not be higher than [AVS_APE_SEPARATOR].
     Builtin(i32),
     /// The string field for APEs in a preset file is always 32 chars, with unneeded
     /// trailing chars filled with zero.
@@ -471,9 +467,13 @@ fn scan_components(
 /// Every preset starts with its ID (either a i32 or APE ID string, see [CompID] for
 /// details) followed by the length of the effect's section in the preset file.
 ///
-/// The distinction between builtin effect and APE is done by comparison to
-/// [AVS_APE_SEPARATOR]. If the `ID >= AVS_APE_SEPARATOR` then the data starting at
-/// the _same_ position is evaluated as ASCII string, which is the APE ID.
+/// The distinction between builtin effect and APE is done by comparison with
+/// [AVS_APE_SEPARATOR]. If the `ID >= AVS_APE_SEPARATOR` then the data starting after
+/// this integer is evaluated as ASCII string, which is the APE ID.
+///
+/// The exact value of the first ID in an APE section is actually a stack pointer from
+/// within AVS and because the x86 stack grows from the top of the process's memory
+/// range downwards, realistically values are always well above [AVS_APE_SEPARATOR].
 fn get_component_len_and_id(
     buf: &Vec<u8>,
     mut pos: usize,
