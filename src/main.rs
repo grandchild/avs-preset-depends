@@ -555,7 +555,7 @@ fn get_globalvars_filename_offset(buf: &[u8], pos: usize) -> usize {
 /// violate YAML's requirements for a bare string. If not, return the string unchanged.
 fn quote_yaml_string_if_needed(string: &str) -> String {
     if string.is_empty() {
-        return string.to_string();
+        return String::from("\"\"");
     }
     let mut is_number = true;
     let mut is_hex_number = false;
@@ -586,6 +586,7 @@ fn quote_yaml_string_if_needed(string: &str) -> String {
         || string.starts_with(special_start_chars)
         || string.contains(": ")
         || string.contains(|c: char| matches!(c, '\0'..='\x1f'))
+        || string.contains('"')
         || string.ends_with([' ', ':'])
         || ["yes", "no", "true", "false", "on", "off", "null", "~"]
             .contains(&string.to_lowercase().as_str())
