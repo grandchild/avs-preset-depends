@@ -558,13 +558,19 @@ fn quote_yaml_string_if_needed(string: &str) -> String {
         return string.to_string();
     }
     let mut is_number = true;
+    let mut is_hex_number = false;
     let mut no_number_separator_yet = true;
     for c in string.chars() {
         match c {
             '0'..='9' => (),
-            '.' | 'e' if no_number_separator_yet => no_number_separator_yet = false,
+            'a'..='f' if is_hex_number => (),
+            '.' | 'e' if no_number_separator_yet => {
+                no_number_separator_yet = false;
+                is_hex_number = false;
+            }
             'x' if string.starts_with("0x") && no_number_separator_yet => {
-                no_number_separator_yet = false
+                no_number_separator_yet = false;
+                is_hex_number = true;
             }
             _ => {
                 is_number = false;
