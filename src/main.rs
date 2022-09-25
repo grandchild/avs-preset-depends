@@ -521,11 +521,8 @@ fn u8arr_fixed_slice<const LENGTH: usize>(arr: &[u8], pos: usize) -> &[u8; LENGT
 /// Decode the byte array starting at `pos` as a null-terminated string.
 fn string_from_u8vec_ntstr1252(arr: &[u8], start: usize, max_len: usize) -> String {
     let mut end: usize = start;
-    loop {
-        match arr[end] {
-            1.. => end += 1,
-            0 => break,
-        }
+    while let 1.. = arr[end] {
+        end += 1;
         if end - start > max_len {
             break;
         }
@@ -546,15 +543,10 @@ fn string_from_u8vec_sizestr1252(arr: &[u8], pos: usize) -> String {
 fn get_globalvars_filename_offset(buf: &[u8], pos: usize) -> usize {
     let mut file_str_start: usize = pos + 4 + 24;
     for _ in ["Init", "Frame", "Beat"] {
-        loop {
-            match buf[file_str_start] {
-                1.. => file_str_start += 1,
-                0 => {
-                    file_str_start += 1;
-                    break;
-                }
-            }
+        while let 1.. = buf[file_str_start] {
+            file_str_start += 1;
         }
+        file_str_start += 1;
     }
     file_str_start - pos
 }
