@@ -344,6 +344,35 @@ fn scan_dirs_and_preset_files(
     }
 }
 
+/// Read a binary file and return it as a list of u8 bytes.
+fn read_binary_file(
+    file_path: &Path,
+    file_path_str: &String,
+) -> Result<Vec<u8>, String> {
+    let mut preset_file = match File::open(file_path) {
+        Err(why) => {
+            return Err(format!("Cannot open file {file_path_str:?} ({why})"));
+        }
+        Ok(file) => file,
+    };
+    let preset_len = match metadata(file_path) {
+        Err(why) => {
+            return Err(format!(
+                "Cannot read properties for file {file_path_str:?} ({why})"
+            ));
+        }
+        Ok(file_metadata) => file_metadata.len() as usize,
+    };
+    let mut preset_bytes: Vec<u8> = Vec::with_capacity(preset_len);
+    match preset_file.read_to_end(&mut preset_bytes) {
+        Err(why) => {
+            return Err(format!("Cannot read from file {file_path_str:?} ({why})"));
+        }
+        Ok(_n) => (),
+    }
+    Ok(preset_bytes)
+}
+
 /// Return a set of all resources referenced in the preset.
 ///
 /// If the preset file is inaccessible or invalid return the empty set.
@@ -353,29 +382,14 @@ fn scan_preset_file(
     resource_specs: &HashMap<CompID, ResourceSpec>,
 ) -> BTreeSet<Resource> {
     let empty = BTreeSet::new();
-    let mut preset_file = match File::open(file_path) {
+    let preset_bytes = match read_binary_file(file_path, file_path_str) {
         Err(why) => {
-            eprintln!("Cannot open file {file_path_str:?} ({why})");
+            eprintln!("{}", why);
             return empty;
         }
-        Ok(file) => file,
+        Ok(bytes) => bytes,
     };
-    let preset_len = match metadata(file_path) {
-        Err(why) => {
-            eprintln!("Cannot read properties for file {file_path_str:?} ({why})");
-            return empty;
-        }
-        Ok(file_metadata) => file_metadata.len() as usize,
-    };
-    let mut preset_bytes: Vec<u8> = Vec::with_capacity(preset_len);
-    match preset_file.read_to_end(&mut preset_bytes) {
-        Err(why) => {
-            eprintln!("Cannot read from file {file_path_str:?} ({why})");
-            return empty;
-        }
-        Ok(_n) => (),
-    }
-    if preset_len < AVS_HEADER_LEN {
+    if preset_bytes.len() < AVS_HEADER_LEN {
         eprintln!("File too short '{file_path_str}'");
         return empty;
     }
@@ -389,7 +403,7 @@ fn scan_preset_file(
     scan_components(
         &preset_bytes,
         pos,
-        preset_len,
+        preset_bytes.len(),
         file_path_str,
         resource_specs,
     )
