@@ -32,29 +32,37 @@ use iterable_enum::IterableEnum;
 use iterable_enum_derive::IterableEnum;
 
 /// Ancient AVS preset file magic.
-static AVS_HEADER_01: &[u8] = b"Nullsoft AVS Preset 0.1\x1a";
+const AVS_HEADER_01: &[u8] = b"Nullsoft AVS Preset 0.1\x1a";
+
 /// Latest AVS preset file magic.
-static AVS_HEADER_02: &[u8] = b"Nullsoft AVS Preset 0.2\x1a";
+const AVS_HEADER_02: &[u8] = b"Nullsoft AVS Preset 0.2\x1a";
+
 /// Length of the AVS preset file magic.
-static AVS_HEADER_LEN: usize = AVS_HEADER_02.len();
+const AVS_HEADER_LEN: usize = AVS_HEADER_02.len();
+
 /// Builtin IDs must be lower than this. To mark a section as an APE section the ID must
 /// be equal to or larger that this.
 ///
 /// The APE ID _string_ starts after this ID.
 const AVS_APE_SEPARATOR: i32 = 0x00004000;
+
 /// The maximum length of an APE ID string.
 ///
 /// Actual IDs are all shorter, and the rest is filled with zero.
 const AVS_APE_ID_LEN: usize = 32;
+
 /// Effect List "APE" Header.
 ///
 /// Modern Effect Lists contain this "APE" as a first member which is then merged into
 /// the Effect List itself.
-static AVS_EL28_HEADER: &[u8] = b"\0@\0\0AVS 2.8+ Effect List Config\0\0\0\0\0";
+const AVS_EL28_HEADER: &[u8] = b"\0@\0\0AVS 2.8+ Effect List Config\0\0\0\0\0";
+
 /// Length of the Effect List "APE" Header.
-static AVS_EL28_HEADER_LEN: usize = AVS_EL28_HEADER.len();
+const AVS_EL28_HEADER_LEN: usize = AVS_EL28_HEADER.len();
+
 /// Length of a i32 in bytes.
 const SIZE_INT32: usize = (i32::BITS / 8) as usize;
+
 /// Maximum length of path strings in old Windows versions. `"C:\"` + 256 path chars +
 /// `'\0'`.
 const WIN32_MAX_PATH: usize = 260;
@@ -71,6 +79,7 @@ enum CompID {
     /// trailing chars filled with zero.
     Ape([u8; AVS_APE_ID_LEN]),
 }
+
 /// The data shape of the resource field in the effect.
 #[derive(Clone, Copy)]
 enum FieldType {
@@ -82,6 +91,7 @@ enum FieldType {
     #[allow(dead_code)]
     SizeStr,
 }
+
 /// The offset into the effect save data where the resource string starts. Usually a
 /// static offset from the start, but some effects are more complicated.
 #[derive(Clone, Copy)]
@@ -108,6 +118,7 @@ enum ResourceType {
     /// Any other file (currently only GlobalVariables' code includes).
     GenericFile,
 }
+
 /// The significance of an empty resource field.
 #[derive(Clone, Copy)]
 enum EmptyIs {
@@ -122,6 +133,7 @@ enum EmptyIs {
     /// file position to stderr.
     Error,
 }
+
 /// Name of the effect and where to find its resource.
 #[derive(Clone, Copy)]
 struct ResourceSpec {
@@ -138,10 +150,11 @@ struct ResourceSpec {
     /// A value to disregard and treat as empty.
     treat_as_empty: Option<&'static str>,
 }
+
 /// The value and type of a resource.
 #[derive(Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
 struct Resource {
-    /// The filename or other name of a resource.
+    /// The filename, font name or ID of a resource.
     string: String,
     /// The type of the resource pointed to.
     rtype: ResourceType,
@@ -258,7 +271,7 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
 /// Treat each arguments as a filesystem path and collect and print all resources from
 /// any AVS preset file found.
 ///
-/// Within each path, sort all resources into sections given by the[ResourceType] enum.
+/// Within each path, sort all resources into sections given by the [ResourceType] enum.
 fn main() {
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
     let args: Vec<String> = env::args().collect();
