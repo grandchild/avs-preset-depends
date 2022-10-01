@@ -103,6 +103,7 @@ enum FieldOffset {
     /// retrieve its offset with more flexibility.
     Function(fn(&[u8], usize) -> usize),
 }
+
 /// The type of the resource pointed to.
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, IterableEnum)]
 enum ResourceType {
@@ -112,6 +113,8 @@ enum ResourceType {
     Video,
     /// A plugin-effect (APE) identifier. This is not the `.ape` filename.
     Ape,
+    /// The filename of a plugin-effect (APE) DLL.
+    ApeFile,
     /// A font name.
     Font,
     /// A Sonique Visualization Plugin effect DLL.
@@ -161,12 +164,26 @@ struct Resource {
     rtype: ResourceType,
 }
 
+/// An APE plugin binary file on disk with its ASCII strings.
+struct ApeBinary {
+    /// The path to the APE file.
+    filename: String,
+    /// Strings of at least a minimum length found in the binary.
+    strings: Vec<String>,
+}
+
 /// Commandline parameters
 #[derive(FromArgs)]
 struct Arguments {
     /// path(s) to preset files or directories.
     #[argh(positional)]
     path: Vec<String>,
+    /// path to Winamp/Plugins/avs directory.
+    #[argh(option)]
+    winamp_dir: Option<String>,
+    /// try and resolve APE ID strings into APE filenames within --winamp-dir.
+    #[argh(switch, short = 'a')]
+    find_apes: bool,
 }
 
 /// A list of selected AVS effects with resources, keyed by their `CompID`s.
@@ -277,19 +294,56 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
     ),
 ];
 
+const KNOWN_BUILTIN_APES: [&'static str; 18] = [
+    "AVS 2.8+ Effect List Config",
+    "Nullsoft MIRROR v1",
+    "Nullsoft Picture Rendering v1",
+    "Winamp AVIAPE v1",
+    "Winamp Brightness APE v1",
+    "Winamp Bump v1",
+    "Winamp ClearScreen APE v1",
+    "Winamp Grain APE v1",
+    "Winamp Interf APE v1",
+    "Winamp Interleave APE v1",
+    "Winamp Mosaic v1",
+    "Winamp Starfield v1",
+    "Winamp Text v1",
+    "Channel Shift",
+    "Color Reduction",
+    "Multiplier",
+    "Holden04: Video Delay",
+    "Holden05: Multi Delay",
+];
+
 /// Treat each arguments as a filesystem path and collect and print all resources from
 /// any AVS preset file found.
 ///
 /// Within each path, sort all resources into sections given by the [ResourceType] enum.
 fn main() {
-    let args: Arguments = argh::from_env();
+    let mut args: Arguments = argh::from_env();
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
+    let mut ape_files: Vec<ApeBinary> = Vec::new();
+    if args.find_apes {
+        match args.winamp_dir {
+            Some(ref winamp_dir) => ape_files = find_ape_files(Path::new(winamp_dir)),
+            None => {
+                eprintln!("Cannot resolve filenames without --winamp-dir");
+                args.find_apes = false;
+            }
+        }
+    }
     for arg in &args.path {
-        let resources = &scan_dirs_and_preset_files(Path::new(&arg), &resource_specs);
+        let mut resources: Vec<_> =
+            scan_dirs_and_preset_files(Path::new(&arg), &resource_specs)
+                .into_iter()
+                .collect();
+        if args.find_apes {
+            resolve_ape_filenames(&mut resources, &ape_files);
+        }
         println!("{}:", quote_yaml_string_if_needed(arg));
         for t in ResourceType::items() {
             let mut section_header_printed = false;
-            for Resource { string, rtype } in resources {
+            for Resource { string, rtype } in &resources {
                 if rtype == &t {
                     if !section_header_printed {
                         println!("  {t}s:");
@@ -431,7 +485,7 @@ fn scan_components(
                 pos += SIZE_INT32 * 2 + AVS_APE_ID_LEN;
                 let string =
                     string_from_u8vec_ntstr1252(&Vec::from(id), 0, AVS_APE_ID_LEN);
-                if string.len() > 2 {
+                if string.len() > 2 && !KNOWN_BUILTIN_APES.contains(&string.as_str()) {
                     // TODO: Check what's up with empty APE IDs!
                     resources.insert(Resource {
                         string,
@@ -534,6 +588,104 @@ fn get_component_len_and_id(
     }
     let component_len: usize = usize32_from_u8arr(buf, pos);
     Ok((component_len, id))
+}
+
+/// Find all .ape files within `winamp_dir` and collect their contained ASCII strings.
+fn find_ape_files(winamp_dir: &Path) -> Vec<ApeBinary> {
+    let mut ape_files: Vec<ApeBinary> = Vec::new();
+    let dir_listing = match read_dir(winamp_dir) {
+        Err(why) => {
+            eprintln!("Cannot list directory {winamp_dir:?} ({why})");
+            return ape_files;
+        }
+        Ok(listing) => listing,
+    };
+    for entry in dir_listing {
+        match entry {
+            Err(ref why) => {
+                eprintln!("Cannot read file entry {entry:?} ({why})");
+                continue;
+            }
+            Ok(entry) => {
+                if !entry.path().is_dir() {
+                    let file_path_str = match entry.path().to_str() {
+                        None => win1252_decode(entry.path().as_os_str().as_bytes()),
+                        Some(string) => string.to_string(),
+                    };
+                    if file_path_str.ends_with(".ape") {
+                        ape_files.push(ApeBinary {
+                            filename: file_path_str.clone(),
+                            strings: collect_ape_file_c_strings(
+                                &entry.path(),
+                                file_path_str,
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    ape_files
+}
+
+/// Go through a binary .ape file and return a list of byte strings of least length 6
+/// (including null) that decode to only printable ASCII characters.
+fn collect_ape_file_c_strings(file_path: &Path, file_path_str: String) -> Vec<String> {
+    let mut strings: Vec<String> = Vec::new();
+    let ape_file_bytes = match read_binary_file(file_path, &file_path_str) {
+        Err(why) => {
+            eprintln!("{}", why);
+            return strings;
+        }
+        Ok(bytes) => bytes,
+    };
+    let mut cur_string = String::new();
+    for byte in ape_file_bytes {
+        match byte {
+            0x20..=0x7e => {
+                cur_string.push(byte as char);
+            }
+            _ => {
+                // "Texer\0" is the shortest known APE ID string
+                if cur_string.len() > 6 && cur_string.len() < AVS_APE_ID_LEN {
+                    strings.push(cur_string);
+                }
+                cur_string = String::new();
+            }
+        }
+    }
+    strings
+}
+
+/// Resolve APE path files from APE ID strings.
+fn resolve_ape_filenames(resources: &mut Vec<Resource>, ape_files: &Vec<ApeBinary>) {
+    for resource in resources {
+        if resource.rtype == ResourceType::Ape {
+            match find_matching_ape_file(&resource.string, ape_files) {
+                Some(ape_file) => {
+                    resource.string = ape_file.filename.clone();
+                    resource.rtype = ResourceType::ApeFile;
+                }
+                None => (),
+            }
+        }
+    }
+}
+
+/// Search for an APE ID string in all APE files' strings and return the reference to
+/// the first matching one, if any.
+fn find_matching_ape_file<'a>(
+    ape_id_str: &String,
+    ape_files: &'a Vec<ApeBinary>,
+) -> Option<&'a ApeBinary> {
+    for ape_file in ape_files {
+        for string in ape_file.strings.iter() {
+            if string.starts_with(ape_id_str) {
+                return Some(ape_file);
+            }
+        }
+    }
+    None
 }
 
 /// Decode 4 bytes of the byte array starting at `pos` as a signed 32bit integer.
@@ -703,6 +855,7 @@ impl std::fmt::Display for ResourceType {
             ResourceType::Image => write!(fmt, "Image"),
             ResourceType::Video => write!(fmt, "Video"),
             ResourceType::Ape => write!(fmt, "APE"),
+            ResourceType::ApeFile => write!(fmt, "APE File"),
             ResourceType::Font => write!(fmt, "Font"),
             ResourceType::Dll => write!(fmt, "DLL"),
             ResourceType::GenericFile => write!(fmt, "File"),
