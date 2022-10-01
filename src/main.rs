@@ -19,7 +19,6 @@ format.
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::env;
 use std::fs::metadata;
 use std::fs::read_dir;
 use std::fs::File;
@@ -30,6 +29,8 @@ use std::path::Path;
 mod iterable_enum;
 use iterable_enum::IterableEnum;
 use iterable_enum_derive::IterableEnum;
+
+use argh::FromArgs;
 
 /// Ancient AVS preset file magic.
 const AVS_HEADER_01: &[u8] = b"Nullsoft AVS Preset 0.1\x1a";
@@ -160,6 +161,14 @@ struct Resource {
     rtype: ResourceType,
 }
 
+/// Commandline parameters
+#[derive(FromArgs)]
+struct Arguments {
+    /// path(s) to preset files or directories.
+    #[argh(positional)]
+    path: Vec<String>,
+}
+
 /// A list of selected AVS effects with resources, keyed by their `CompID`s.
 ///
 /// This list of tuples will be turned into a [HashMap] at the beginning of [main],
@@ -273,9 +282,9 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
 ///
 /// Within each path, sort all resources into sections given by the [ResourceType] enum.
 fn main() {
+    let args: Arguments = argh::from_env();
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
-    let args: Vec<String> = env::args().collect();
-    for arg in &args[1..] {
+    for arg in &args.path {
         let resources = &scan_dirs_and_preset_files(Path::new(&arg), &resource_specs);
         println!("{}:", quote_yaml_string_if_needed(arg));
         for t in ResourceType::items() {
