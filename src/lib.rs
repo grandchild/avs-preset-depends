@@ -106,7 +106,7 @@ enum FieldOffset {
 
 /// The type of the resource pointed to.
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, IterableEnum)]
-enum ResourceType {
+pub enum ResourceType {
     /// An image file.
     Image,
     /// A video file.
@@ -157,11 +157,11 @@ struct ResourceSpec {
 
 /// The value and type of a resource.
 #[derive(Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
-struct Resource {
+pub struct Resource {
     /// The filename, font name or ID of a resource.
-    string: String,
+    pub string: String,
     /// The type of the resource pointed to.
-    rtype: ResourceType,
+    pub rtype: ResourceType,
 }
 
 /// An APE plugin binary file on disk with its ASCII strings.
@@ -174,16 +174,17 @@ struct ApeBinary {
 
 /// Commandline parameters
 #[derive(FromArgs)]
-struct Arguments {
+pub struct Arguments {
     /// path(s) to preset files or directories.
     #[argh(positional)]
-    path: Vec<String>,
-    /// path to Winamp/Plugins/avs directory.
+    pub path: Vec<String>,
+    /// path to Winamp base directory, can also tolerate if you pass paths to
+    /// `Winamp/Plugins` or `Winamp/Plugins/avs`.
     #[argh(option)]
-    winamp_dir: Option<String>,
-    /// try and resolve APE ID strings into APE filenames within --winamp-dir.
+    pub winamp_dir: Option<String>,
+    /// try and resolve APE ID strings into APE filenames within `--winamp-dir`.
     #[argh(switch, short = 'a')]
-    find_apes: bool,
+    pub find_apes: bool,
 }
 
 /// A list of selected AVS effects with resources, keyed by their `CompID`s.
@@ -317,11 +318,9 @@ const KNOWN_BUILTIN_APES: [&str; 18] = [
     "Holden05: Multi Delay",
 ];
 
-/// Treat each arguments as a filesystem path and collect and print all resources from
-/// any AVS preset file found.
-///
-/// Within each path, sort all resources into sections given by the [ResourceType] enum.
-pub fn print_depends(args: &mut Arguments) {
+/// Treat each of [Arguments::path] as a filesystem path and return all resources for
+/// any AVS preset file found in each path.
+pub fn get_depends(args: &mut Arguments) -> HashMap<&String, Vec<Resource>> {
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
     let mut ape_files: Vec<ApeBinary> = Vec::new();
     if args.find_apes {
@@ -333,6 +332,7 @@ pub fn print_depends(args: &mut Arguments) {
             }
         }
     }
+    let mut depends: HashMap<&String, Vec<Resource>> = HashMap::new();
     for arg in &args.path {
         let mut resources: Vec<_> =
             scan_dirs_and_preset_files(Path::new(&arg), &resource_specs)
@@ -341,20 +341,9 @@ pub fn print_depends(args: &mut Arguments) {
         if args.find_apes {
             resolve_ape_filenames(&mut resources, &ape_files);
         }
-        println!("{}:", quote_yaml_string_if_needed(arg));
-        for t in ResourceType::items() {
-            let mut section_header_printed = false;
-            for Resource { string, rtype } in &resources {
-                if rtype == &t {
-                    if !section_header_printed {
-                        println!("  {t}s:");
-                        section_header_printed = true;
-                    }
-                    println!("    - {}", quote_yaml_string_if_needed(string));
-                }
-            }
-        }
+        depends.insert(arg, resources);
     }
+    depends
 }
 
 /// Check if the given path is an AVS file or a directory, collect resources therein
@@ -736,52 +725,6 @@ fn get_globalvars_filename_offset(buf: &[u8], pos: usize) -> usize {
         file_str_start += 1;
     }
     file_str_start - pos
-}
-
-/// Add quotes around the string and escapes as needed if the string would otherwise
-/// violate YAML's requirements for a bare string. If not, return the string unchanged.
-fn quote_yaml_string_if_needed(string: &str) -> String {
-    if string.is_empty() {
-        return String::from("\"\"");
-    }
-    let mut is_number = true;
-    let mut is_hex_number = false;
-    let mut no_number_separator_yet = true;
-    for c in string.chars() {
-        match c {
-            '0'..='9' => (),
-            'a'..='f' if is_hex_number => (),
-            '.' | 'e' if no_number_separator_yet => {
-                no_number_separator_yet = false;
-                is_hex_number = false;
-            }
-            'x' if string.starts_with("0x") && no_number_separator_yet => {
-                no_number_separator_yet = false;
-                is_hex_number = true;
-            }
-            _ => {
-                is_number = false;
-                break;
-            }
-        }
-    }
-    let special_start_chars = [
-        '.', '&', '*', '?', '|', '-', '<', '>', '=', '!', '%', '@', '`', '{', '[',
-        '\'', ' ', '#',
-    ];
-    if is_number
-        || string.starts_with(special_start_chars)
-        || string.contains(": ")
-        || string.contains(|c: char| matches!(c, '\0'..='\x1f'))
-        || string.contains('"')
-        || string.ends_with([' ', ':'])
-        || ["yes", "no", "true", "false", "on", "off", "null", "~"]
-            .contains(&string.to_lowercase().as_str())
-    {
-        format!("\"{}\"", string.escape_default())
-    } else {
-        string.to_string()
-    }
 }
 
 /// Decode a byte array into a [String] assuming a Windows1252 encoding.
