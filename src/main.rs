@@ -1,25 +1,19 @@
 use preset_depends::get_depends;
-use preset_depends::iterable_enum::IterableEnum;
 use preset_depends::Arguments;
 use preset_depends::Resource;
-use preset_depends::ResourceType;
 
 fn main() {
     let mut args: Arguments = argh::from_env();
     let resources_for_paths = get_depends(&mut args);
     for (path, resources) in resources_for_paths {
         println!("{}:", quote_yaml_string_if_needed(path));
-        for t in ResourceType::items() {
-            let mut section_header_printed = false;
-            for Resource { string, rtype } in &resources {
-                if rtype == &t {
-                    if !section_header_printed {
-                        println!("  {t}s:");
-                        section_header_printed = true;
-                    }
-                    println!("    - {}", quote_yaml_string_if_needed(string));
-                }
+        let mut last_resource_type = None;
+        for Resource { string, rtype } in &resources {
+            if Some(rtype) != last_resource_type {
+                println!("  {rtype}s:");
             }
+            println!("    - {}", quote_yaml_string_if_needed(string));
+            last_resource_type = Some(rtype);
         }
     }
 }

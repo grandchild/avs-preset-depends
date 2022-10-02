@@ -26,10 +26,6 @@ use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-mod iterable_enum;
-use iterable_enum::IterableEnum;
-use iterable_enum_derive::IterableEnum;
-
 use argh::FromArgs;
 
 /// Ancient AVS preset file magic.
@@ -105,7 +101,7 @@ enum FieldOffset {
 }
 
 /// The type of the resource pointed to.
-#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, IterableEnum)]
+#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
 pub enum ResourceType {
     /// An image file.
     Image,
@@ -158,10 +154,10 @@ struct ResourceSpec {
 /// The value and type of a resource.
 #[derive(Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
 pub struct Resource {
-    /// The filename, font name or ID of a resource.
-    pub string: String,
     /// The type of the resource pointed to.
     pub rtype: ResourceType,
+    /// The filename, font name or ID of a resource.
+    pub string: String,
 }
 
 /// An APE plugin binary file on disk with its ASCII strings.

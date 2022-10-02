@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 argh = "0"
-iterable_enum_derive = { path = "iterable_enum_derive" }
 
 [profile.release]
 strip = true
