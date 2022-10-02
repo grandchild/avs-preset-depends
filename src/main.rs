@@ -190,7 +190,7 @@ struct Arguments {
 ///
 /// This list of tuples will be turned into a [HashMap] at the beginning of [main],
 /// because they can't be statically initialized in Rust (yet?).
-static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
+const RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
     (
         CompID::Builtin(10),
         ResourceSpec {
@@ -294,7 +294,9 @@ static RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
     ),
 ];
 
-const KNOWN_BUILTIN_APES: [&'static str; 18] = [
+/// A list of APE ID strings for plugins that used to be external at some point but are
+/// now builtin to AVS proper.
+const KNOWN_BUILTIN_APES: [&str; 18] = [
     "AVS 2.8+ Effect List Config",
     "Nullsoft MIRROR v1",
     "Nullsoft Picture Rendering v1",
@@ -661,12 +663,9 @@ fn collect_ape_file_c_strings(file_path: &Path, file_path_str: String) -> Vec<St
 fn resolve_ape_filenames(resources: &mut Vec<Resource>, ape_files: &Vec<ApeBinary>) {
     for resource in resources {
         if resource.rtype == ResourceType::Ape {
-            match find_matching_ape_file(&resource.string, ape_files) {
-                Some(ape_file) => {
-                    resource.string = ape_file.filename.clone();
-                    resource.rtype = ResourceType::ApeFile;
-                }
-                None => (),
+            if let Some(ape_file) = find_ape_file_match(&resource.string, ape_files) {
+                resource.string = ape_file.filename.clone();
+                resource.rtype = ResourceType::ApeFile;
             }
         }
     }
@@ -674,7 +673,7 @@ fn resolve_ape_filenames(resources: &mut Vec<Resource>, ape_files: &Vec<ApeBinar
 
 /// Search for an APE ID string in all APE files' strings and return the reference to
 /// the first matching one, if any.
-fn find_matching_ape_file<'a>(
+fn find_ape_file_match<'a>(
     ape_id_str: &String,
     ape_files: &'a Vec<ApeBinary>,
 ) -> Option<&'a ApeBinary> {
@@ -724,10 +723,11 @@ fn string_from_u8vec_sizestr1252(arr: &[u8], pos: usize) -> String {
     win1252_decode(&arr[pos + SIZE_INT32..pos + SIZE_INT32 + str_size])
 }
 
-/// Return the code include filename for the GlobalVariables APE effect.
+/// Return the offset for the code include filename for the GlobalVariables APE effect.
 ///
-/// The offset of the filename depends on the size of the other code fields, so scan
-/// through Init, Frame and Beat code strings first, and return the string after them.
+/// The offset depends on the size of the preceding code fields, so scan through Init,
+/// Frame and Beat code strings first, and return the resulting offset from the start
+/// of the save section.
 fn get_globalvars_filename_offset(buf: &[u8], pos: usize) -> usize {
     let mut file_str_start: usize = pos + 4 + 24;
     for _ in ["Init", "Frame", "Beat"] {
