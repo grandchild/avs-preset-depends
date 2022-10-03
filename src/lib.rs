@@ -23,8 +23,10 @@ use std::fs::metadata;
 use std::fs::read_dir;
 use std::fs::File;
 use std::io::Read;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
+
+#[cfg(target_family = "unix")]
+use std::os::unix::ffi::OsStrExt;
 
 use argh::FromArgs;
 
@@ -376,10 +378,7 @@ fn scan_dirs_and_preset_files(
         }
         resources
     } else {
-        let file_path_str = match file_path.to_str() {
-            None => win1252_decode(file_path.as_os_str().as_bytes()),
-            Some(string) => string.to_string(),
-        };
+        let file_path_str = decode_path_str(file_path);
         if file_path_str.ends_with(".avs") {
             return scan_preset_file(file_path, &file_path_str, resource_specs);
         }
@@ -597,10 +596,7 @@ fn find_ape_files(winamp_dir: &Path) -> Vec<ApeBinary> {
             }
             Ok(entry) => {
                 if !entry.path().is_dir() {
-                    let file_path_str = match entry.path().to_str() {
-                        None => win1252_decode(entry.path().as_os_str().as_bytes()),
-                        Some(string) => string.to_string(),
-                    };
+                    let file_path_str = decode_path_str(&entry.path());
                     if file_path_str.ends_with(".ape") {
                         ape_files.push(ApeBinary {
                             filename: file_path_str.clone(),
@@ -724,6 +720,25 @@ fn get_globalvars_filename_offset(buf: &[u8], pos: usize) -> usize {
         file_str_start += 1;
     }
     file_str_start - pos
+}
+
+/// Decode a path string to UTF-8 or, if that fails, as Win1252 (which cannot fail, it
+/// can only be wrong).
+#[cfg(target_family = "unix")]
+fn decode_path_str(path: &Path) -> String {
+    match path.to_str() {
+        None => win1252_decode(path.as_os_str().as_bytes()),
+        Some(string) => string.to_string(),
+    }
+}
+
+/// Decode a path string to UTF-8. On Windows this cannot fail, i.e. all paths are UTF-8
+/// or UTF-16? Unsure.
+#[cfg(target_family = "windows")]
+fn decode_path_str(path: &Path) -> String {
+    path.to_str()
+        .expect("This path should be valid UTF-8!")
+        .to_string()
 }
 
 /// Decode a byte array into a [String] assuming a Windows1252 encoding.
