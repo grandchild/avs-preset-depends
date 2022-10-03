@@ -16,16 +16,22 @@ cargo build --release
 
 ### Usage
 
-For each path (either file or directory) the tool will print out a sectioned list of
-resources the preset(s) wants to use.
-
-```shell
-target/release/preset-depends preset.avs
-# or
-target/release/preset-depends ~/Winamp/Plugins/avs/Me/MyPack/
 ```
+Usage: preset-depends [<path...>] [--winamp-dir <winamp-dir>] [-a] [--check]
 
-If you pass multiple paths, it will output separate lists for each path.
+For each path (either file or directory) print out a sectioned list of resources
+the preset(s) depend on.
+
+Positional Arguments:
+  path              path(s) to preset files or directories.
+
+Options:
+  --winamp-dir      path to Winamp base directory, can also tolerate if you pass
+                    paths to `Winamp/Plugins` or `Winamp/Plugins/avs`.
+  -a, --find-apes   try and resolve APE ID strings into APE filenames within
+                    `--winamp-dir`.
+  --help            display usage information
+```
 
 
 #### Example Output
@@ -62,19 +68,18 @@ If you pass multiple paths, it will output separate lists for each path.
 
 ### Todo
 
-- Translate APE ID strings into `.ape` filenames if available.
-- Make precompiled releases downloadable
-- Allow setting a `Winamp/Plugins/avs` base-dir to find and print full paths for
-  available and warnings for missing files
+- Print full paths for available and warnings for missing files
+- Unit- & integration testing
+- CI & downloadable release builds
+- Try retrieving resources `async`.
 
 
 ### Learning Rust
 
 While this project does serve a useful purpose, it is with _equal_ importance a project
 for learning Rust. I try hard to make the code as idiomatic as possible and to apply
-various parts of the language and libraries. For example the `IterableEnum` trait
-sub-crate is borderline unnecessary but taught me a bit about how to write macros. The
-code should have minimal dependencies and produce the smallest possible binary size.
+various parts of the language and libraries. Other than that the code should have
+minimal dependencies and produce the smallest possible binary size.
 
 
 ### License
