@@ -63,3 +63,64 @@ fn quote_yaml_string_if_needed(string: &str) -> String {
         string.to_string()
     }
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_quote_yaml_string_if_needed() {
+        let cases = [
+            ("", "\"\""),
+            ("a", "a"),
+            ("1", "\"1\""),
+            ("1.0", "\"1.0\""),
+            (".0", "\".0\""),
+            ("1.", "\"1.\""),
+            ("0x1", "\"0x1\""),
+            ("2e2", "\"2e2\""),
+            ("2e2e2", "2e2e2"),
+            ("0x2e2", "\"0x2e2\""),
+            ("0e2x2", "0e2x2"),
+            ("0xa", "\"0xa\""),
+            ("no", "\"no\""),
+            ("true", "\"true\""),
+            ("false", "\"false\""),
+            ("on", "\"on\""),
+            ("off", "\"off\""),
+            ("null", "\"null\""),
+            ("~", "\"~\""),
+            ("yes", "\"yes\""),
+            ("yEs", "\"yEs\""),
+            ("YES", "\"YES\""),
+            ("ye:s", "ye:s"),
+            ("ye: s", "\"ye: s\""),
+            ("yes:", "\"yes:\""),
+            (":yes", ":yes"),
+            ("ye\"s", "\"ye\\\"s\""),
+            (" weird", "\" weird\""),
+            ("weird ", "\"weird \""),
+            (".weird", "\".weird\""),
+            ("&weird", "\"&weird\""),
+            ("*weird", "\"*weird\""),
+            ("?weird", "\"?weird\""),
+            ("|weird", "\"|weird\""),
+            ("-weird", "\"-weird\""),
+            ("<weird", "\"<weird\""),
+            (">weird", "\">weird\""),
+            ("=weird", "\"=weird\""),
+            ("!weird", "\"!weird\""),
+            ("%weird", "\"%weird\""),
+            ("@weird", "\"@weird\""),
+            ("`weird", "\"`weird\""),
+            ("{weird", "\"{weird\""),
+            ("[weird", "\"[weird\""),
+            ("'weird", "\"\\'weird\""),
+            ("#weird", "\"#weird\""),
+            ("\nweird", "\"\\nweird\""),
+            ("\nweird", "\"\\nweird\""),
+        ];
+        for (input, expected) in cases {
+            let result = super::quote_yaml_string_if_needed(input);
+            assert_eq!(result, expected);
+        }
+    }
+}
