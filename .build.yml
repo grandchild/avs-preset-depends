@@ -1,0 +1,19 @@
+image: archlinux
+packages:
+  - rustup
+sources:
+  - https://git.sr.ht/~grandchild/avs-preset-depends
+tasks:
+  - setup: |
+      rustup toolchain install stable-x86_64-unknown-linux-gnu
+      rustup default stable-x86_64-unknown-linux-gnu
+  - check: |
+      cd avs-preset-depends
+      rustfmt --check **/*.rs
+      cargo test
+  - build: |
+      cd avs-preset-depends
+      cargo b --release
+      cp target/release/preset-depends ../preset-depends_x86_64-linux-gnu
+artifacts:
+  - preset-depends_x86_64-linux-gnu
