@@ -168,7 +168,8 @@ struct ApeBinary {
     strings: Vec<String>,
 }
 
-/// Commandline parameters
+/// For each path (either file or directory) print out a sectioned list of resources the
+/// preset(s) depend on.
 #[derive(FromArgs)]
 pub struct Arguments {
     /// path(s) to preset files or directories.
