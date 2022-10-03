@@ -1,2 +1,7 @@
 max_width = 88
-wrap_comments = true
+
+# Comment-wrapping isn't stable yet, and turning wrap_comments on
+# doesn't actually make rustfmt wrap the comments but still leads
+# to false rustfmt check errors.
+#wrap_comments = true
+#comment_width = 88
