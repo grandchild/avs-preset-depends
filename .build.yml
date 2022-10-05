@@ -13,6 +13,9 @@ tasks:
   - check: |
       cd avs-preset-depends
       rustfmt --check **/*.rs
+      cargo clippy
+  - test: |
+      cd avs-preset-depends
       cargo test
   - build-linux: |
       cd avs-preset-depends
