@@ -1,19 +1,29 @@
 image: archlinux
 packages:
   - rustup
+  - mingw-w64-gcc  # for windows build linker stage
 sources:
   - https://git.sr.ht/~grandchild/avs-preset-depends
+
 tasks:
   - setup: |
-      rustup toolchain install stable-x86_64-unknown-linux-gnu
-      rustup default stable-x86_64-unknown-linux-gnu
+      rustup default stable
+      rustup target add x86_64-unknown-linux-gnu
+      rustup target add x86_64-pc-windows-gnu
   - check: |
       cd avs-preset-depends
       rustfmt --check **/*.rs
       cargo test
-  - build: |
+  - build-linux: |
       cd avs-preset-depends
-      cargo b --release
-      cp target/release/preset-depends ../preset-depends_x86_64-linux-gnu
+      cargo b --release --target x86_64-unknown-linux-gnu
+      cp target/x86_64-unknown-linux-gnu/release/preset-depends \
+        ../preset-depends_x86_64-linux
+  - build-windows: |
+      cd avs-preset-depends
+      cargo b --release --target x86_64-pc-windows-gnu
+      cp target/x86_64-pc-windows-gnu/release/preset-depends.exe \
+        ../preset-depends_x86_64-windows.exe
 artifacts:
-  - preset-depends_x86_64-linux-gnu
+  - preset-depends_x86_64-linux
+  - preset-depends_x86_64-windows.exe
