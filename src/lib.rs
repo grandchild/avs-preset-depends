@@ -317,7 +317,7 @@ const KNOWN_BUILTIN_APES: [&str; 18] = [
 
 /// Treat each of [Arguments::path] as a filesystem path and return all resources for
 /// any AVS preset file found in each path.
-pub fn get_depends(args: &mut Arguments) -> HashMap<&String, Vec<Resource>> {
+pub fn get_depends(args: &mut Arguments) -> HashMap<&String, BTreeSet<Resource>> {
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
     let mut ape_files: Vec<ApeBinary> = Vec::new();
     if args.find_apes {
@@ -329,16 +329,18 @@ pub fn get_depends(args: &mut Arguments) -> HashMap<&String, Vec<Resource>> {
             }
         }
     }
-    let mut depends: HashMap<&String, Vec<Resource>> = HashMap::new();
+    let mut depends: HashMap<&String, BTreeSet<Resource>> = HashMap::new();
     for arg in &args.path {
-        let mut resources: Vec<_> =
-            scan_dirs_and_preset_files(Path::new(&arg), &resource_specs)
-                .into_iter()
-                .collect();
+        let resources = scan_dirs_and_preset_files(Path::new(&arg), &resource_specs);
         if args.find_apes {
-            resolve_ape_filenames(&mut resources, &ape_files);
+            // intermediate move to vector, because you can't edit values in a set.
+            let mut vec_resources: Vec<_> = resources.into_iter().collect();
+            resolve_ape_filenames(&mut vec_resources, &ape_files);
+            // now back to a set because we want the resources sorted.
+            depends.insert(arg, vec_resources.into_iter().collect());
+        } else {
+            depends.insert(arg, resources);
         }
-        depends.insert(arg, resources);
     }
     depends
 }
