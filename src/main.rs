@@ -58,7 +58,7 @@ fn quote_yaml_string_if_needed(string: &str) -> String {
         || ["yes", "no", "true", "false", "on", "off", "null", "~"]
             .contains(&string.to_lowercase().as_str())
     {
-        format!("\"{}\"", string.escape_default())
+        format!("\"{}\"", string)
     } else {
         string.to_string()
     }
