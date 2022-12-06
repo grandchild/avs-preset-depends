@@ -333,15 +333,19 @@ pub fn get_depends(args: &mut Arguments) -> HashMap<&String, BTreeSet<Resource>>
     }
     let mut depends: HashMap<&String, BTreeSet<Resource>> = HashMap::new();
     for arg in &args.path {
-        let resources = scan_dirs_and_preset_files(Path::new(&arg), &resource_specs);
-        if args.find_apes {
-            // intermediate move to vector, because you can't edit values in a set.
-            let mut vec_resources: Vec<_> = resources.into_iter().collect();
-            resolve_ape_filenames(&mut vec_resources, &ape_files);
-            // now back to a set because we want the resources sorted.
-            depends.insert(arg, vec_resources.into_iter().collect());
-        } else {
-            depends.insert(arg, resources);
+        match scan_dirs_and_preset_files(Path::new(&arg), &resource_specs) {
+            Ok(resources) => {
+                if args.find_apes {
+                    // intermediate move to vector, you can't edit values in a set.
+                    let mut vec_resources: Vec<_> = resources.into_iter().collect();
+                    resolve_ape_filenames(&mut vec_resources, &ape_files);
+                    // now back to a set because we want the resources sorted.
+                    depends.insert(arg, vec_resources.into_iter().collect());
+                } else {
+                    depends.insert(arg, resources);
+                }
+            }
+            Err(why) => eprintln!("{why}"),
         }
     }
     depends
@@ -354,13 +358,12 @@ pub fn get_depends(args: &mut Arguments) -> HashMap<&String, BTreeSet<Resource>>
 fn scan_dirs_and_preset_files(
     file_path: &Path,
     resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> BTreeSet<Resource> {
+) -> Result<BTreeSet<Resource>, String> {
     if file_path.is_dir() {
         let mut resources: BTreeSet<Resource> = BTreeSet::new();
         let dir_listing = match read_dir(file_path) {
             Err(why) => {
-                eprintln!("Cannot list directory {file_path:?} ({why})");
-                return resources;
+                return Err(format!("Cannot list directory {file_path:?} ({why})"));
             }
             Ok(listing) => listing,
         };
@@ -371,18 +374,20 @@ fn scan_dirs_and_preset_files(
                     continue;
                 }
                 Ok(entry) => {
-                    resources = &resources
-                        | &scan_dirs_and_preset_files(&entry.path(), resource_specs);
+                    match scan_dirs_and_preset_files(&entry.path(), resource_specs) {
+                        Ok(new_resources) => resources = &resources | &new_resources,
+                        Err(why) => eprintln!("{why}"),
+                    }
                 }
             }
         }
-        resources
+        Ok(resources)
     } else {
         let file_path_str = decode_path_str(file_path);
         if file_path_str.ends_with(".avs") {
             return scan_preset_file(file_path, &file_path_str, resource_specs);
         }
-        BTreeSet::new()
+        Ok(BTreeSet::new())
     }
 }
 
@@ -422,24 +427,20 @@ fn scan_preset_file(
     file_path: &Path,
     file_path_str: &String,
     resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> BTreeSet<Resource> {
-    let empty = BTreeSet::new();
+) -> Result<BTreeSet<Resource>, String> {
     let preset_bytes = match read_binary_file(file_path, file_path_str) {
         Err(why) => {
-            eprintln!("{}", why);
-            return empty;
+            return Err(why);
         }
         Ok(bytes) => bytes,
     };
     if preset_bytes.len() < AVS_HEADER_LEN {
-        eprintln!("File too short '{file_path_str}'");
-        return empty;
+        return Err(format!("File too short '{file_path_str}'"));
     }
     let header = &preset_bytes[0..AVS_HEADER_LEN];
     let mut pos: usize = AVS_HEADER_LEN;
     if header != AVS_HEADER_02 && header != AVS_HEADER_01 {
-        eprintln!("Header wrong in '{file_path_str}'");
-        return empty;
+        return Err(format!("Header wrong in '{file_path_str}'"));
     }
     pos += 1; // "Clear Every Frame"
     scan_components(
@@ -460,7 +461,7 @@ fn scan_components(
     max_pos: usize,
     file_path_str: &String,
     resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> BTreeSet<Resource> {
+) -> Result<BTreeSet<Resource>, String> {
     let mut resources = BTreeSet::new();
     while pos < max_pos {
         let (len, id) = match get_component_len_and_id(buf, pos) {
@@ -524,20 +525,22 @@ fn scan_components(
                             offset += SIZE_INT32;
                         }
                     }
-                    resources = &resources
-                        | &scan_components(
-                            buf,
-                            offset,
-                            pos + len,
-                            file_path_str,
-                            resource_specs,
-                        );
+                    match scan_components(
+                        buf,
+                        offset,
+                        pos + len,
+                        file_path_str,
+                        resource_specs,
+                    ) {
+                        Ok(new_resources) => resources = &resources | &new_resources,
+                        Err(why) => eprintln!("{why}"),
+                    }
                 }
             }
         }
         pos += len;
     }
-    resources
+    Ok(resources)
 }
 
 /// Decode the byte array at `pos` as an AVS effect ID and its serialized length.
