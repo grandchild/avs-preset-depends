@@ -71,11 +71,11 @@ fn quote_yaml_string_if_needed(string: &str) -> String {
         format!(
             "\"{}\"",
             string
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\t", "\\t")
-                .replace("\r", "\\r")
+                .replace('\\', "\\\\")
+                .replace('\"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\t', "\\t")
+                .replace('\r', "\\r")
         )
     } else {
         string.to_string()
