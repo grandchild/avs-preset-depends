@@ -191,8 +191,8 @@ struct ResourceFile {
 
 /// A list of selected AVS effects with resources, keyed by their `CompID`s.
 ///
-/// This list of tuples will be turned into a [HashMap] at the beginning of [main],
-/// because they can't be statically initialized in Rust (yet?).
+/// This list of tuples will be turned into a [HashMap] at the beginning of
+/// [get_depends], because they can't be statically initialized in Rust (yet?).
 const RESOURCE_SPECS_DATA: [(CompID, ResourceSpec); 9] = [
     (
         CompID::Builtin(10),
