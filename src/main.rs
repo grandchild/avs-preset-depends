@@ -1,6 +1,7 @@
 use preset_depends::get_depends;
 use preset_depends::Arguments;
 use preset_depends::Resource;
+use preset_depends::ResourceAvailable;
 
 fn main() {
     let mut args: Arguments = argh::from_env();
@@ -8,11 +9,20 @@ fn main() {
     for (path, resources) in resources_for_paths {
         println!("{}:", quote_yaml_string_if_needed(path));
         let mut last_resource_type = None;
-        for Resource { string, rtype } in &resources {
+        for Resource {
+            string,
+            rtype,
+            available,
+        } in &resources
+        {
             if Some(rtype) != last_resource_type {
                 println!("  {rtype}s:");
             }
-            println!("    - {}", quote_yaml_string_if_needed(string));
+            print!("    - {}", quote_yaml_string_if_needed(string));
+            if available == &ResourceAvailable::No {
+                print!("  # missing!")
+            }
+            println!();
             last_resource_type = Some(rtype);
         }
     }

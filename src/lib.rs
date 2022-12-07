@@ -111,8 +111,6 @@ pub enum ResourceType {
     Video,
     /// A plugin-effect (APE) identifier. This is not the `.ape` filename.
     Ape,
-    /// The filename of a plugin-effect (APE) DLL.
-    ApeFile,
     /// A font name.
     Font,
     /// A Sonique Visualization Plugin effect DLL.
@@ -153,6 +151,19 @@ struct ResourceSpec {
     treat_as_empty: Option<&'static str>,
 }
 
+/// The availability of a resource on-disk.
+#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+pub enum ResourceAvailable {
+    /// The resource hasn't been searched for yet, or it won't be.
+    Undetermined,
+    /// Resource is available as a file.
+    Yes,
+    /// Resource file is not present in given Winamp dir.
+    No,
+    /// Resource is not a file. (Currently this always implies [ResourceType::Font]).
+    NotApplicable,
+}
+
 /// The value and type of a resource.
 #[derive(Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
 pub struct Resource {
@@ -160,6 +171,8 @@ pub struct Resource {
     pub rtype: ResourceType,
     /// The filename, font name or ID of a resource.
     pub string: String,
+    /// The availability on-disk, if applicable
+    pub available: ResourceAvailable,
 }
 
 /// An APE plugin binary file on disk with its ASCII strings.
@@ -170,6 +183,14 @@ struct ApeBinary {
     strings: Vec<String>,
 }
 
+/// A resource file on disk
+struct ResourceFile {
+    /// The lowercase filename for comparison
+    filename: String,
+    /// The full original path, relative to the given Winamp directory.
+    path: String,
+}
+
 /// For each path (either file or directory) print out a sectioned list of resources the
 /// preset(s) depend on.
 #[derive(FromArgs)]
@@ -177,13 +198,11 @@ pub struct Arguments {
     /// path(s) to preset files or directories.
     #[argh(positional)]
     pub path: Vec<String>,
-    /// path to Winamp base directory, can also tolerate if you pass paths to
-    /// `Winamp/Plugins` or `Winamp/Plugins/avs`.
-    #[argh(option)]
+    /// path to Winamp base directory, if given will resolve filenames for many
+    /// resources including images and APE plugin files.
+    /// also tolerates if you pass paths to `Winamp/Plugins` or `Winamp/Plugins/avs`.
+    #[argh(option, short = 'w')]
     pub winamp_dir: Option<String>,
-    /// try and resolve APE ID strings into APE filenames within `--winamp-dir`.
-    #[argh(switch, short = 'a')]
-    pub find_apes: bool,
 }
 
 /// A list of selected AVS effects with resources, keyed by their `CompID`s.
@@ -321,24 +340,28 @@ const KNOWN_BUILTIN_APES: [&str; 18] = [
 /// any AVS preset file found in each path.
 pub fn get_depends(args: &mut Arguments) -> HashMap<&String, BTreeSet<Resource>> {
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
-    let mut ape_files: Vec<ApeBinary> = Vec::new();
-    if args.find_apes {
-        match args.winamp_dir {
-            Some(ref winamp_dir) => ape_files = find_ape_files(Path::new(winamp_dir)),
-            None => {
-                eprintln!("Cannot resolve filenames without --winamp-dir");
-                args.find_apes = false;
-            }
+    let (resource_files, ape_files) = match args.winamp_dir {
+        Some(ref winamp_dir) => {
+            let winamp_dir_path = Path::new(winamp_dir);
+            (
+                find_resource_files(winamp_dir_path),
+                find_ape_files(winamp_dir_path),
+            )
         }
-    }
+        None => (Vec::new(), Vec::new()),
+    };
     let mut depends: HashMap<&String, BTreeSet<Resource>> = HashMap::new();
     for arg in &args.path {
         match scan_dirs_and_preset_files(Path::new(&arg), &resource_specs) {
             Ok(resources) => {
-                if args.find_apes {
+                if !resource_files.is_empty() || !ape_files.is_empty() {
                     // intermediate move to vector, you can't edit values in a set.
                     let mut vec_resources: Vec<_> = resources.into_iter().collect();
-                    resolve_ape_filenames(&mut vec_resources, &ape_files);
+                    resolve_resource_filenames(
+                        &mut vec_resources,
+                        &resource_files,
+                        &ape_files,
+                    );
                     // now back to a set because we want the resources sorted.
                     depends.insert(arg, vec_resources.into_iter().collect());
                 } else {
@@ -479,6 +502,7 @@ fn scan_components(
                     resources.insert(Resource {
                         string,
                         rtype: ResourceType::Ape,
+                        available: ResourceAvailable::Undetermined,
                     });
                 }
             }
@@ -509,6 +533,7 @@ fn scan_components(
                     resources.insert(Resource {
                         string,
                         rtype: spec.rtype,
+                        available: ResourceAvailable::Undetermined,
                     });
                 }
             }
@@ -581,6 +606,54 @@ fn get_component_len_and_id(
     Ok((component_len, id))
 }
 
+/// List all files within `path` as a tuple of their filename and complete path strings.
+/// This is a breadth-first traversal, i.e. files closer to the root path will be listed
+/// first.
+fn find_resource_files(path: &Path) -> Vec<ResourceFile> {
+    match find_resource_files_checked(path) {
+        Ok(files) => files,
+        Err(why) => {
+            eprintln!("{why}");
+            Vec::new()
+        }
+    }
+}
+
+/// List all files within `path`. [Result]-typed version of [find_resource_files].
+fn find_resource_files_checked(path: &Path) -> Result<Vec<ResourceFile>, String> {
+    if path.is_dir() {
+        let dir_listing = match read_dir(path) {
+            Err(why) => {
+                return Err(format!("Cannot list directory {path:?} ({why})"));
+            }
+            Ok(listing) => listing,
+        };
+        let mut files: Vec<ResourceFile> = Vec::new();
+        for entry in dir_listing {
+            let file_or_dir = match entry {
+                Err(ref why) => {
+                    eprintln!("Cannot read file entry {entry:?} ({why})");
+                    continue;
+                }
+                Ok(entry) => entry,
+            };
+            match find_resource_files_checked(&file_or_dir.path()) {
+                Ok(mut nested_files) => files.append(&mut nested_files),
+                Err(why) => eprintln!("{why}"),
+            }
+        }
+        Ok(files)
+    } else {
+        match decode_path_filename_str(path) {
+            Some(filename) => Ok(vec![ResourceFile {
+                filename: filename.to_lowercase(),
+                path: decode_path_str(path),
+            }]),
+            None => Err(format!("Path '{path:?}' has no filename part.")),
+        }
+    }
+}
+
 /// Find all .ape files within `winamp_dir` and collect their contained ASCII strings.
 fn find_ape_files(winamp_dir: &Path) -> Vec<ApeBinary> {
     let mut ape_files: Vec<ApeBinary> = Vec::new();
@@ -645,16 +718,54 @@ fn collect_ape_file_c_strings(file_path: &Path, file_path_str: String) -> Vec<St
     strings
 }
 
-/// Resolve APE path files from APE ID strings.
-fn resolve_ape_filenames(resources: &mut Vec<Resource>, ape_files: &Vec<ApeBinary>) {
+/// Search for matching files in the given `winamp_dir` or, for APE effects, for
+/// matching APE plugin files from APE ID strings.
+fn resolve_resource_filenames(
+    resources: &mut Vec<Resource>,
+    resource_files: &Vec<ResourceFile>,
+    ape_files: &Vec<ApeBinary>,
+) {
     for resource in resources {
-        if resource.rtype == ResourceType::Ape {
-            if let Some(ape_file) = find_ape_file_match(&resource.string, ape_files) {
-                resource.string = ape_file.filename.clone();
-                resource.rtype = ResourceType::ApeFile;
+        match resource.rtype {
+            ResourceType::Image
+            | ResourceType::Video
+            | ResourceType::Dll
+            | ResourceType::GenericFile => {
+                if let Some(resource_filename) =
+                    find_resource_file_match(&resource.string, resource_files)
+                {
+                    resource.string = resource_filename;
+                    resource.available = ResourceAvailable::Yes;
+                } else {
+                    resource.available = ResourceAvailable::No;
+                }
             }
+            ResourceType::Ape => {
+                if let Some(ape_file) = find_ape_file_match(&resource.string, ape_files)
+                {
+                    resource.string = ape_file.filename.clone();
+                    resource.available = ResourceAvailable::Yes;
+                } else {
+                    resource.available = ResourceAvailable::No;
+                }
+            }
+            ResourceType::Font => (),
         }
     }
+}
+
+/// Search for a resource file in the given directory, recursively.
+fn find_resource_file_match(
+    search: &str,
+    resource_files: &Vec<ResourceFile>,
+) -> Option<String> {
+    let lower_search = search.to_lowercase();
+    for ResourceFile { filename, path } in resource_files {
+        if *filename == lower_search {
+            return Some(path.clone());
+        }
+    }
+    None
 }
 
 /// Search for an APE ID string in all APE files' strings and return the reference to
@@ -725,7 +836,7 @@ fn get_globalvars_filename_offset(buf: &[u8], pos: usize) -> usize {
     file_str_start - pos
 }
 
-/// Decode a path string to UTF-8 or, if that fails, as Win1252 (which cannot fail, it
+/// Decode a path string as UTF-8 or, if that fails, as Win1252 (which cannot fail, it
 /// can only be wrong).
 #[cfg(target_family = "unix")]
 fn decode_path_str(path: &Path) -> String {
@@ -735,13 +846,35 @@ fn decode_path_str(path: &Path) -> String {
     }
 }
 
-/// Decode a path string to UTF-8. On Windows this cannot fail, i.e. all paths are UTF-8
+/// Decode a path's file_name as UTF-8 or, if that fails, as Win1252 (which cannot fail,
+/// it can only be wrong).
+#[cfg(target_family = "unix")]
+fn decode_path_filename_str(path: &Path) -> Option<String> {
+    path.file_name().map(|file_name| match file_name.to_str() {
+        None => win1252_decode(file_name.as_bytes()),
+        Some(string) => string.to_string(),
+    })
+}
+
+/// Decode a path string as UTF-8. On Windows this cannot fail, i.e. all paths are UTF-8
 /// or UTF-16? Unsure.
 #[cfg(target_family = "windows")]
 fn decode_path_str(path: &Path) -> String {
     path.to_str()
         .expect("This path should be valid UTF-8!")
         .to_string()
+}
+
+/// Decode a path's file_name as UTF-8. On Windows this cannot fail, i.e. all paths are
+/// UTF-8 or UTF-16? Unsure.
+#[cfg(target_family = "windows")]
+fn decode_path_filename_str(path: &Path) -> Option<String> {
+    path.file_name().map(|file_name| {
+        file_name
+            .to_str()
+            .expect("This filename should be valid UTF-8!")
+            .to_string()
+    })
 }
 
 /// Decode a byte array into a [String] assuming a Windows1252 encoding.
@@ -814,7 +947,6 @@ impl std::fmt::Display for ResourceType {
             ResourceType::Image => write!(fmt, "Image"),
             ResourceType::Video => write!(fmt, "Video"),
             ResourceType::Ape => write!(fmt, "APE"),
-            ResourceType::ApeFile => write!(fmt, "APE File"),
             ResourceType::Font => write!(fmt, "Font"),
             ResourceType::Dll => write!(fmt, "DLL"),
             ResourceType::GenericFile => write!(fmt, "File"),
