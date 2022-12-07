@@ -68,7 +68,15 @@ fn quote_yaml_string_if_needed(string: &str) -> String {
         || ["yes", "no", "true", "false", "on", "off", "null", "~"]
             .contains(&string.to_lowercase().as_str())
     {
-        format!("\"{}\"", string)
+        format!(
+            "\"{}\"",
+            string
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\t", "\\t")
+                .replace("\r", "\\r")
+        )
     } else {
         string.to_string()
     }
@@ -123,7 +131,7 @@ mod test {
             ("`weird", "\"`weird\""),
             ("{weird", "\"{weird\""),
             ("[weird", "\"[weird\""),
-            ("'weird", "\"\\'weird\""),
+            ("'weird", "\"'weird\""),
             ("#weird", "\"#weird\""),
             ("\nweird", "\"\\nweird\""),
             ("\nweird", "\"\\nweird\""),
