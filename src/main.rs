@@ -1,11 +1,26 @@
 use preset_depends::get_depends;
-use preset_depends::Arguments;
 use preset_depends::Resource;
 use preset_depends::ResourceAvailable;
 
+use argh::FromArgs;
+
+/// For each path (either file or directory) print out a sectioned list of resources the
+/// preset(s) depend on.
+#[derive(FromArgs)]
+pub struct Arguments {
+    /// path(s) to preset files or directories.
+    #[argh(positional)]
+    pub path: Vec<String>,
+    /// path to Winamp base directory, if given will resolve filenames for many
+    /// resources including images and APE plugin files.
+    /// also tolerates if you pass paths to `Winamp/Plugins` or `Winamp/Plugins/avs`.
+    #[argh(option, short = 'w')]
+    pub winamp_dir: Option<String>,
+}
+
 fn main() {
-    let mut args: Arguments = argh::from_env();
-    let resources_for_paths = get_depends(&mut args);
+    let args: Arguments = argh::from_env();
+    let resources_for_paths = get_depends(&args.path, &args.winamp_dir);
     for (path, resources) in resources_for_paths {
         println!("{}:", quote_yaml_string_if_needed(path));
         let mut last_resource_type = None;

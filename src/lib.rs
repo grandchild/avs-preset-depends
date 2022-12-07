@@ -28,8 +28,6 @@ use std::path::Path;
 #[cfg(target_family = "unix")]
 use std::os::unix::ffi::OsStrExt;
 
-use argh::FromArgs;
-
 /// Ancient AVS preset file magic.
 const AVS_HEADER_01: &[u8] = b"Nullsoft AVS Preset 0.1\x1a";
 
@@ -191,20 +189,6 @@ struct ResourceFile {
     path: String,
 }
 
-/// For each path (either file or directory) print out a sectioned list of resources the
-/// preset(s) depend on.
-#[derive(FromArgs)]
-pub struct Arguments {
-    /// path(s) to preset files or directories.
-    #[argh(positional)]
-    pub path: Vec<String>,
-    /// path to Winamp base directory, if given will resolve filenames for many
-    /// resources including images and APE plugin files.
-    /// also tolerates if you pass paths to `Winamp/Plugins` or `Winamp/Plugins/avs`.
-    #[argh(option, short = 'w')]
-    pub winamp_dir: Option<String>,
-}
-
 /// A list of selected AVS effects with resources, keyed by their `CompID`s.
 ///
 /// This list of tuples will be turned into a [HashMap] at the beginning of [main],
@@ -336,11 +320,14 @@ const KNOWN_BUILTIN_APES: [&str; 18] = [
     "Holden05: Multi Delay",
 ];
 
-/// Treat each of [Arguments::path] as a filesystem path and return all resources for
+/// Treat each path as a filesystem path and return all resources for
 /// any AVS preset file found in each path.
-pub fn get_depends(args: &mut Arguments) -> HashMap<&String, BTreeSet<Resource>> {
+pub fn get_depends<'a>(
+    paths: &'a Vec<String>,
+    winamp_dir: &Option<String>,
+) -> HashMap<&'a String, BTreeSet<Resource>> {
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
-    let (resource_files, ape_files) = match args.winamp_dir {
+    let (resource_files, ape_files) = match winamp_dir {
         Some(ref winamp_dir) => {
             let winamp_dir_path = Path::new(winamp_dir);
             (
@@ -351,8 +338,8 @@ pub fn get_depends(args: &mut Arguments) -> HashMap<&String, BTreeSet<Resource>>
         None => (Vec::new(), Vec::new()),
     };
     let mut depends: HashMap<&String, BTreeSet<Resource>> = HashMap::new();
-    for arg in &args.path {
-        match scan_dirs_and_preset_files(Path::new(&arg), &resource_specs) {
+    for path in paths {
+        match scan_dirs_and_preset_files(Path::new(&path), &resource_specs) {
             Ok(resources) => {
                 if !resource_files.is_empty() || !ape_files.is_empty() {
                     // intermediate move to vector, you can't edit values in a set.
@@ -363,9 +350,9 @@ pub fn get_depends(args: &mut Arguments) -> HashMap<&String, BTreeSet<Resource>>
                         &ape_files,
                     );
                     // now back to a set because we want the resources sorted.
-                    depends.insert(arg, vec_resources.into_iter().collect());
+                    depends.insert(path, vec_resources.into_iter().collect());
                 } else {
-                    depends.insert(arg, resources);
+                    depends.insert(path, resources);
                 }
             }
             Err(why) => eprintln!("{why}"),
