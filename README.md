@@ -1,5 +1,7 @@
 ## AVS Preset Depends
 
+[![builds.sr.ht status](https://builds.sr.ht/~grandchild.svg?search=avs-preset-depends)](https://builds.sr.ht/~grandchild?search=avs-preset-depends)
+
 A CLI tool to scan Winamp AVS presets for any files it might need.
 
 Scan individual files or whole directories.
@@ -17,7 +19,7 @@ cargo build --release
 ### Usage
 
 ```
-Usage: preset-depends [<path...>] [--winamp-dir <winamp-dir>] [-a] [--check]
+Usage: preset-depends [<path...>] [-w <winamp-dir>]
 
 For each path (either file or directory) print out a sectioned list of resources
 the preset(s) depend on.
@@ -26,10 +28,10 @@ Positional Arguments:
   path              path(s) to preset files or directories.
 
 Options:
-  --winamp-dir      path to Winamp base directory, can also tolerate if you pass
-                    paths to `Winamp/Plugins` or `Winamp/Plugins/avs`.
-  -a, --find-apes   try and resolve APE ID strings into APE filenames within
-                    `--winamp-dir`.
+  -w, --winamp-dir  path to Winamp base directory, if given will resolve
+                    filenames for many resources including images and APE plugin
+                    files. also tolerates if you pass paths to `Winamp/Plugins`
+                    or `Winamp/Plugins/avs`.
   --help            display usage information
 ```
 
@@ -68,10 +70,9 @@ Options:
 
 ### Todo
 
-- Print full paths for available and warnings for missing files
+- Try retrieving resources `async`.
 - Unit- & integration testing
 - CI & downloadable release builds
-- Try retrieving resources `async`.
 
 
 ### Learning Rust
