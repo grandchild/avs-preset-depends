@@ -2,8 +2,12 @@ image: archlinux
 packages:
   - rustup
   - mingw-w64-gcc  # for windows build linker stage
+  - hut
 sources:
   - https://git.sr.ht/~grandchild/avs-preset-depends
+oauth: pages.sr.ht/PAGES:RW
+environment:
+  docsite: grandchild.srht.site
 
 tasks:
   - setup: |
@@ -25,6 +29,12 @@ tasks:
       cd avs-preset-depends
       cargo b --release --target x86_64-pc-windows-gnu
       mv target/x86_64-pc-windows-gnu/release/preset-depends.exe ../
+  - publish-docs: |
+      cd avs-preset-depends
+      cargo doc --document-private-items --no-deps
+      cd target/doc/
+      tar -cvz . > ../docs.tar.gz
+      hut pages publish -d $docsite ../docs.tar.gz
 artifacts:
   - preset-depends
   - preset-depends.exe
