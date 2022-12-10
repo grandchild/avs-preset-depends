@@ -33,10 +33,11 @@ fn main() {
             if Some(rtype) != last_resource_type {
                 println!("  {rtype}s:");
             }
-            print!("    - {}", quote_yaml_string_if_needed(string));
+            print!("    - ");
             if available == &ResourceAvailable::No {
-                print!("  # missing!")
+                print!("!missing ")
             }
+            print!("{}", quote_yaml_string_if_needed(string));
             println!();
             last_resource_type = Some(rtype);
         }
