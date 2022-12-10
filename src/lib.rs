@@ -1,19 +1,35 @@
 /*!
-A CLI tool to scan Winamp AVS presets for any files it might need.
+Scan Winamp AVS presets for any files they might need.
 
 Scan individual files or whole directories.
 
 Usage examples:
-```shell
-preset-depends preset.avs
-```
-or
-```shell
-preset-depends ~/Winamp/Plugins/avs/Me/MyPack/
-```
 
-The output is a map of resource types each with a list of individual resources, in YAML
-format.
+    use preset_depends::get_depends;
+    use preset_depends::Resource;
+
+    let paths = vec!["/my/presets/preset.avs".to_owned()];
+    let resources_for_paths = get_depends(&paths, &None);
+    for (_path, resources) in resources_for_paths {
+        for Resource{string, ..} in resources {
+            println!("{string}");
+        }
+    }
+
+or
+
+    use preset_depends::get_depends;
+    use preset_depends::Resource;
+    let paths = vec![
+        "/my/presets/".to_owned(),
+        "/my_other/presets/".to_owned()
+    ];
+    let winamp_dir = "/path/to/Winamp/Plugins/avs/".to_owned();
+    let resources_for_paths = get_depends(&paths, &Some(winamp_dir));
+    // etc. See above.
+
+`get_depends()` returns a map from each of the `paths` given to the resources needed by
+the presets found within.
 */
 #![warn(clippy::missing_docs_in_private_items)]
 
@@ -320,8 +336,12 @@ const KNOWN_BUILTIN_APES: [&str; 18] = [
     "Holden05: Multi Delay",
 ];
 
-/// Treat each path as a filesystem path and return all resources for
-/// any AVS preset file found in each path.
+/// Scan the given `paths` and return all resources for any AVS preset file found in
+/// each path. A path may be a preset file or a directory.
+///
+/// If additionally a `winamp_dir` path is given, then all the files in it will be
+/// scanned. Any resource that is a file (i.e. not fonts) will be searched for in the
+/// list and if found, the complete path is reported instead of just the filename.
 pub fn get_depends<'a>(
     paths: &'a Vec<String>,
     winamp_dir: &Option<String>,
@@ -401,7 +421,7 @@ fn scan_dirs_and_preset_files(
     }
 }
 
-/// Read a binary file and return it as a list of u8 bytes.
+/// Read a binary file and return it as a list of `u8` bytes.
 fn read_binary_file(
     file_path: &Path,
     file_path_str: &String,
