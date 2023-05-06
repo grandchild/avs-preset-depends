@@ -479,7 +479,7 @@ fn scan_preset_file(
 
 /// Recursively walk the preset tree and find any effects that have resources.
 ///
-/// Return any resources found, or the empty set.
+/// Return any resources found, or an empty set.
 fn scan_components(
     buf: &Vec<u8>,
     mut pos: usize,
@@ -572,8 +572,10 @@ fn scan_components(
 
 /// Decode the byte array at `pos` as an AVS effect ID and its serialized length.
 ///
-/// Every preset starts with its ID (either a i32 or APE ID string, see [CompID] for
-/// details) followed by the length of the effect's section in the preset file.
+/// Every effect starts with its ID (an i32, either the builtin effect's ID or some
+/// arbitrary number > [AVS_APE_SEPARATOR]). In APE effect sections the APE ID string
+/// follows (see [CompID] for details). Next comes the length of the effect's section
+/// in the preset file (an i32 again).
 ///
 /// The distinction between builtin effect and APE is done by comparison with
 /// [AVS_APE_SEPARATOR]. If the `ID >= AVS_APE_SEPARATOR` then the data starting after
