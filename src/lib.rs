@@ -458,12 +458,7 @@ fn scan_preset_file(
     file_path_str: &String,
     resource_specs: &HashMap<CompID, ResourceSpec>,
 ) -> Result<BTreeSet<Resource>, String> {
-    let preset_bytes = match read_binary_file(file_path, file_path_str) {
-        Err(why) => {
-            return Err(why);
-        }
-        Ok(bytes) => bytes,
-    };
+    let preset_bytes = read_binary_file(file_path, file_path_str)?;
     if preset_bytes.len() < AVS_HEADER_LEN {
         return Err(format!("File too short '{file_path_str}'"));
     }
