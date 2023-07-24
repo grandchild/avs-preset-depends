@@ -58,3 +58,5 @@ jobs:
         run: rustfmt **/*.rs
       - name: clippy
         run: cargo clippy -- -Dwarnings
+      - name: tests
+        run: cargo test

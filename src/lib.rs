@@ -44,6 +44,9 @@ use std::path::Path;
 #[cfg(target_family = "unix")]
 use std::os::unix::ffi::OsStrExt;
 
+#[cfg(test)]
+mod lib_tests;
+
 /// Ancient AVS preset file magic.
 const AVS_HEADER_01: &[u8] = b"Nullsoft AVS Preset 0.1\x1a";
 
@@ -117,7 +120,8 @@ enum FieldOffset {
 }
 
 /// The type of the resource pointed to.
-#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
+#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+// #[derive(Debug)] needed by unit tests
 pub enum ResourceType {
     /// An image file.
     Image,
