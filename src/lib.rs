@@ -500,12 +500,13 @@ fn scan_components(
                 let string =
                     string_from_u8vec_ntstr1252(&Vec::from(id), 0, AVS_APE_ID_LEN);
                 if string.len() > 2 && !KNOWN_BUILTIN_APES.contains(&string.as_str()) {
-                    // TODO: Check what's up with empty APE IDs!
                     resources.insert(Resource {
                         string,
                         rtype: ResourceType::Ape,
                         available: ResourceAvailable::Undetermined,
                     });
+                } else {
+                    // TODO: Check what's up with empty APE IDs!
                 }
             }
         };
