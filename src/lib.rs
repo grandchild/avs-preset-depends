@@ -40,9 +40,12 @@ use std::fs::read_dir;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::path::PathBuf;
 
 #[cfg(target_family = "unix")]
 use std::os::unix::ffi::OsStrExt;
+
+use rayon::prelude::*;
 
 #[cfg(test)]
 mod lib_tests;
@@ -363,7 +366,12 @@ pub fn get_depends<'a>(
     };
     let mut depends: HashMap<&String, BTreeSet<Resource>> = HashMap::new();
     for path in paths {
-        match scan_dirs_and_preset_files(Path::new(&path), &resource_specs) {
+        let mut preset_paths = Vec::<PathBuf>::new();
+        match scan_for_preset_files(Path::new(path)) {
+            Ok(ref mut new_paths) => preset_paths.append(new_paths),
+            Err(why) => eprintln!("{why}"),
+        }
+        match scan_preset_files(preset_paths, &resource_specs) {
             Ok(resources) => {
                 if !resource_files.is_empty() || !ape_files.is_empty() {
                     // intermediate move to vector, you can't edit values in a set.
@@ -385,16 +393,11 @@ pub fn get_depends<'a>(
     depends
 }
 
-/// Check if the given path is an AVS file or a directory, collect resources therein
+/// Check if the given path is an AVS file or a directory, and collect all paths therin
 /// (in case of directories recursively) and return them.
-///
-/// In case of any permission errors return the empty set.
-fn scan_dirs_and_preset_files(
-    file_path: &Path,
-    resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> Result<BTreeSet<Resource>, String> {
+fn scan_for_preset_files(file_path: &Path) -> Result<Vec<PathBuf>, String> {
     if file_path.is_dir() {
-        let mut resources: BTreeSet<Resource> = BTreeSet::new();
+        let mut preset_paths: Vec<PathBuf> = Vec::new();
         let dir_listing = match read_dir(file_path) {
             Err(why) => {
                 return Err(format!("Cannot list directory {file_path:?} ({why})"));
@@ -407,22 +410,47 @@ fn scan_dirs_and_preset_files(
                     eprintln!("Cannot read file entry {entry:?} ({why})");
                     continue;
                 }
-                Ok(entry) => {
-                    match scan_dirs_and_preset_files(&entry.path(), resource_specs) {
-                        Ok(new_resources) => resources = &resources | &new_resources,
-                        Err(why) => eprintln!("{why}"),
-                    }
-                }
+                Ok(entry) => match scan_for_preset_files(&entry.path()) {
+                    Ok(ref mut new_paths) => preset_paths.append(new_paths),
+                    Err(why) => eprintln!("{why}"),
+                },
             }
         }
-        Ok(resources)
+        Ok(preset_paths)
     } else {
         let file_path_str = decode_path_str(file_path);
         if file_path_str.ends_with(".avs") {
-            return scan_preset_file(file_path, &file_path_str, resource_specs);
+            return Ok(vec![file_path.to_path_buf()]);
         }
-        Ok(BTreeSet::new())
+        Ok(Vec::<PathBuf>::new())
     }
+}
+
+/// Scan the given preset files for any resources and return the resources found.
+fn scan_preset_files(
+    preset_paths: Vec<PathBuf>,
+    resource_specs: &HashMap<CompID, ResourceSpec>,
+) -> Result<BTreeSet<Resource>, String> {
+    preset_paths
+        .par_iter()
+        .map(|file_path| scan_preset_file(file_path, &"".to_string(), resource_specs))
+        .reduce(
+            || Ok(BTreeSet::new()),
+            |resources, result| match (resources, result) {
+                (Ok(mut resources), Ok(mut new_resources)) => {
+                    resources.append(&mut new_resources);
+                    Ok(resources)
+                }
+                (Err(why), new) => {
+                    println!("{why}");
+                    new
+                }
+                (old, Err(why)) => {
+                    println!("{why}");
+                    old
+                }
+            },
+        )
 }
 
 /// Read a binary file and return it as a list of `u8` bytes.

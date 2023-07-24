@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 argh = "0"
+rayon = "1"
 
 [profile.release]
 strip = true
