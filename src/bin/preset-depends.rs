@@ -16,6 +16,10 @@ pub struct Arguments {
     /// also tolerates if you pass paths to `Winamp/Plugins` or `Winamp/Plugins/avs`.
     #[argh(option, short = 'w')]
     pub winamp_dir: Option<String>,
+    /// collect preset counts for each resource. note multiple uses in one preset still
+    /// only count as one.
+    #[argh(switch, short = 'c')]
+    pub count: bool,
 }
 
 fn main() {
@@ -24,15 +28,21 @@ fn main() {
     for (path, resources) in resources_for_paths {
         println!("{}:", quote_yaml_string_if_needed(path));
         let mut last_resource_type = None;
-        for Resource { string, rtype, available } in &resources {
+        for (Resource { string, rtype, available }, count) in &resources {
             if Some(rtype) != last_resource_type {
                 println!("  {rtype}s:");
             }
-            print!("    - ");
+            print!("    ");
+            if !args.count {
+                print!("- ");
+            }
             if available == &ResourceAvailable::No {
                 print!("!missing ")
             }
             print!("{}", quote_yaml_string_if_needed(string));
+            if args.count {
+                print!(": {count}");
+            }
             println!();
             last_resource_type = Some(rtype);
         }

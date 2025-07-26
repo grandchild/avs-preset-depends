@@ -11,8 +11,8 @@ Usage examples:
     let paths = vec!["/my/presets/preset.avs".to_owned()];
     let resources_for_paths = get_depends(&paths, None);
     for (_path, resources) in resources_for_paths {
-        for Resource{string, ..} in resources {
-            println!("{string}");
+        for (Resource{string, ..}, count) in resources {
+            println!("{string}, used by {count} presets");
         }
     }
 
@@ -33,7 +33,7 @@ the presets found within.
 */
 #![warn(clippy::missing_docs_in_private_items)]
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fs::metadata;
 use std::fs::read_dir;
@@ -349,7 +349,7 @@ const KNOWN_BUILTIN_APES: [&str; 18] = [
 pub fn get_depends<'a>(
     paths: &'a Vec<String>,
     winamp_dir: Option<&String>,
-) -> HashMap<&'a String, BTreeSet<Resource>> {
+) -> HashMap<&'a String, BTreeMap<Resource, usize>> {
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
     let (resource_files, ape_files) = match winamp_dir {
         Some(ref winamp_dir) => {
@@ -358,19 +358,19 @@ pub fn get_depends<'a>(
         }
         None => (Vec::new(), Vec::new()),
     };
-    let mut depends: HashMap<&String, BTreeSet<Resource>> = HashMap::new();
+    let mut depends: HashMap<&String, BTreeMap<Resource, usize>> = HashMap::new();
     for path in paths {
         match scan_dirs_and_preset_files(Path::new(&path), &resource_specs) {
             Ok(resources) => {
                 if !resource_files.is_empty() || !ape_files.is_empty() {
-                    // intermediate move to vector, you can't edit values in a set.
+                    // intermediate move to vector, you can't edit keys in a map.
                     let mut vec_resources: Vec<_> = resources.into_iter().collect();
                     resolve_resource_filenames(
                         &mut vec_resources,
                         &resource_files,
                         &ape_files,
                     );
-                    // now back to a set because we want the resources sorted.
+                    // now back to a map because we want the resources sorted.
                     depends.insert(path, vec_resources.into_iter().collect());
                 } else {
                     depends.insert(path, resources);
@@ -389,9 +389,9 @@ pub fn get_depends<'a>(
 fn scan_dirs_and_preset_files(
     file_path: &Path,
     resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> Result<BTreeSet<Resource>, String> {
+) -> Result<BTreeMap<Resource, usize>, String> {
     if file_path.is_dir() {
-        let mut resources: BTreeSet<Resource> = BTreeSet::new();
+        let mut resources: BTreeMap<Resource, usize> = BTreeMap::new();
         let dir_listing = match read_dir(file_path) {
             Err(why) => {
                 return Err(format!("Cannot list directory {file_path:?} ({why})"));
@@ -406,7 +406,9 @@ fn scan_dirs_and_preset_files(
                 }
                 Ok(entry) => {
                     match scan_dirs_and_preset_files(&entry.path(), resource_specs) {
-                        Ok(new_resources) => resources = &resources | &new_resources,
+                        Ok(mut new_resources) => {
+                            join_resources(&mut resources, &mut new_resources)
+                        }
                         Err(why) => eprintln!("{why}"),
                     }
                 }
@@ -418,7 +420,7 @@ fn scan_dirs_and_preset_files(
         if file_path_str.ends_with(".avs") {
             return scan_preset_file(file_path, &file_path_str, resource_specs);
         }
-        Ok(BTreeSet::new())
+        Ok(BTreeMap::new())
     }
 }
 
@@ -458,7 +460,7 @@ fn scan_preset_file(
     file_path: &Path,
     file_path_str: &String,
     resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> Result<BTreeSet<Resource>, String> {
+) -> Result<BTreeMap<Resource, usize>, String> {
     let preset_bytes = read_binary_file(file_path, file_path_str)?;
     if preset_bytes.len() < AVS_HEADER_LEN {
         return Err(format!("File too short '{file_path_str}'"));
@@ -487,8 +489,8 @@ fn scan_components(
     max_pos: usize,
     file_path_str: &String,
     resource_specs: &HashMap<CompID, ResourceSpec>,
-) -> Result<BTreeSet<Resource>, String> {
-    let mut resources = BTreeSet::new();
+) -> Result<BTreeMap<Resource, usize>, String> {
+    let mut resources = BTreeMap::new();
     while pos < max_pos {
         let (len, id) = match get_component_len_and_id(buf, pos) {
             Err(_why) => break,
@@ -501,13 +503,17 @@ fn scan_components(
                 let string =
                     string_from_u8vec_ntstr1252(&Vec::from(id), 0, AVS_APE_ID_LEN);
                 if string.len() > 2 && !KNOWN_BUILTIN_APES.contains(&string.as_str()) {
-                    resources.insert(Resource {
-                        string,
-                        rtype: ResourceType::Ape,
-                        available: ResourceAvailable::Undetermined,
-                    });
+                    resources.insert(
+                        Resource {
+                            string,
+                            rtype: ResourceType::Ape,
+                            available: ResourceAvailable::Undetermined,
+                        },
+                        1,
+                    );
                 } else {
                     // TODO: Check what's up with empty APE IDs!
+                    // eprintln!("Empty APE ID found at position {}", pos);
                 }
             }
         };
@@ -534,11 +540,14 @@ fn scan_components(
                     }
                 }
                 if !string.is_empty() && Some(string.as_str()) != spec.treat_as_empty {
-                    resources.insert(Resource {
-                        string,
-                        rtype: spec.rtype,
-                        available: ResourceAvailable::Undetermined,
-                    });
+                    resources.insert(
+                        Resource {
+                            string,
+                            rtype: spec.rtype,
+                            available: ResourceAvailable::Undetermined,
+                        },
+                        1,
+                    );
                 }
             }
             None => {
@@ -561,7 +570,9 @@ fn scan_components(
                         file_path_str,
                         resource_specs,
                     ) {
-                        Ok(new_resources) => resources = &resources | &new_resources,
+                        Ok(mut new_resources) => {
+                            join_resources(&mut resources, &mut new_resources)
+                        }
                         Err(why) => eprintln!("{why}"),
                     }
                 }
@@ -727,11 +738,11 @@ fn collect_ape_file_c_strings(file_path: &Path, file_path_str: String) -> Vec<St
 /// Search for matching files in the given `winamp_dir` or, for APE effects, for
 /// matching APE plugin files from APE ID strings.
 fn resolve_resource_filenames(
-    resources: &mut Vec<Resource>,
+    resources: &mut Vec<(Resource, usize)>,
     resource_files: &Vec<ResourceFile>,
     ape_files: &Vec<ApeBinary>,
 ) {
-    for resource in resources {
+    for (resource, _) in resources {
         match resource.rtype {
             ResourceType::Image
             | ResourceType::Video
@@ -788,6 +799,16 @@ fn find_ape_file_match<'a>(
         }
     }
     None
+}
+
+/// Move elements from source into target, adding the counter values together.
+fn join_resources(
+    target: &mut BTreeMap<Resource, usize>,
+    source: &mut BTreeMap<Resource, usize>,
+) {
+    while let Some((resource, count)) = source.pop_last() {
+        target.entry(resource).and_modify(|c| *c += count).or_insert(count);
+    }
 }
 
 /// Decode 4 bytes of the byte array starting at `pos` as a signed 32bit integer.
