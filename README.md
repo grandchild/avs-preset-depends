@@ -19,7 +19,7 @@ cargo build --release
 ### Usage
 
 ```
-Usage: preset-depends [<path...>] [-w <winamp-dir>]
+Usage: preset-depends [<path...>] [-w <winamp-dir>] [-c]
 
 For each path (either file or directory) print out a sectioned list of resources
 the preset(s) depend on.
@@ -32,6 +32,8 @@ Options:
                     filenames for many resources including images and APE plugin
                     files. also tolerates if you pass paths to `Winamp/Plugins`
                     or `Winamp/Plugins/avs`.
+  -c, --count       collect preset counts for each resource. note multiple uses
+                    in one preset still only count as one.
   --help            display usage information
 ```
 
