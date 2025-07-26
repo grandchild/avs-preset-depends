@@ -354,10 +354,7 @@ pub fn get_depends<'a>(
     let (resource_files, ape_files) = match winamp_dir {
         Some(ref winamp_dir) => {
             let winamp_dir_path = Path::new(winamp_dir);
-            (
-                find_resource_files(winamp_dir_path),
-                find_ape_files(winamp_dir_path),
-            )
+            (find_resource_files(winamp_dir_path), find_ape_files(winamp_dir_path))
         }
         None => (Vec::new(), Vec::new()),
     };
@@ -869,9 +866,7 @@ fn decode_path_filename_str(path: &Path) -> Option<String> {
 /// or UTF-16? Unsure.
 #[cfg(target_family = "windows")]
 fn decode_path_str(path: &Path) -> String {
-    path.to_str()
-        .expect("This path should be valid UTF-8!")
-        .to_string()
+    path.to_str().expect("This path should be valid UTF-8!").to_string()
 }
 
 /// Decode a path's file_name as UTF-8. On Windows this cannot fail, i.e. all paths are
@@ -879,10 +874,7 @@ fn decode_path_str(path: &Path) -> String {
 #[cfg(target_family = "windows")]
 fn decode_path_filename_str(path: &Path) -> Option<String> {
     path.file_name().map(|file_name| {
-        file_name
-            .to_str()
-            .expect("This filename should be valid UTF-8!")
-            .to_string()
+        file_name.to_str().expect("This filename should be valid UTF-8!").to_string()
     })
 }
 

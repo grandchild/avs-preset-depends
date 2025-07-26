@@ -24,12 +24,7 @@ fn main() {
     for (path, resources) in resources_for_paths {
         println!("{}:", quote_yaml_string_if_needed(path));
         let mut last_resource_type = None;
-        for Resource {
-            string,
-            rtype,
-            available,
-        } in &resources
-        {
+        for Resource { string, rtype, available } in &resources {
             if Some(rtype) != last_resource_type {
                 println!("  {rtype}s:");
             }

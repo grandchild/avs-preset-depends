@@ -5,3 +5,12 @@ max_width = 88
 # to false rustfmt check errors.
 #wrap_comments = true
 #comment_width = 88
+
+use_small_heuristics = "Off"
+fn_call_width = 88
+attr_fn_like_width = 88
+struct_lit_width = 88
+struct_variant_width = 88
+array_width = 88
+chain_width = 88
+single_line_if_else_max_width = 88
