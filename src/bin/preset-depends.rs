@@ -20,7 +20,7 @@ pub struct Arguments {
 
 fn main() {
     let args: Arguments = argh::from_env();
-    let resources_for_paths = get_depends(&args.path, &args.winamp_dir);
+    let resources_for_paths = get_depends(&args.path, args.winamp_dir.as_ref());
     for (path, resources) in resources_for_paths {
         println!("{}:", quote_yaml_string_if_needed(path));
         let mut last_resource_type = None;

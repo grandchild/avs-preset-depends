@@ -9,7 +9,7 @@ Usage examples:
     use preset_depends::Resource;
 
     let paths = vec!["/my/presets/preset.avs".to_owned()];
-    let resources_for_paths = get_depends(&paths, &None);
+    let resources_for_paths = get_depends(&paths, None);
     for (_path, resources) in resources_for_paths {
         for Resource{string, ..} in resources {
             println!("{string}");
@@ -25,7 +25,7 @@ or
         "/my_other/presets/".to_owned()
     ];
     let winamp_dir = "/path/to/Winamp/Plugins/avs/".to_owned();
-    let resources_for_paths = get_depends(&paths, &Some(winamp_dir));
+    let resources_for_paths = get_depends(&paths, Some(&winamp_dir));
     // etc. See above.
 
 `get_depends()` returns a map from each of the `paths` given to the resources needed by
@@ -348,7 +348,7 @@ const KNOWN_BUILTIN_APES: [&str; 18] = [
 /// list and if found, the complete path is reported instead of just the filename.
 pub fn get_depends<'a>(
     paths: &'a Vec<String>,
-    winamp_dir: &Option<String>,
+    winamp_dir: Option<&String>,
 ) -> HashMap<&'a String, BTreeSet<Resource>> {
     let resource_specs = HashMap::from(RESOURCE_SPECS_DATA);
     let (resource_files, ape_files) = match winamp_dir {
