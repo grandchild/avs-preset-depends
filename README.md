@@ -70,7 +70,13 @@ Options:
 
 ### Todo
 
-- Try retrieving resources `async`.
+- ~~Try retrieving resources `async`.~~
+    - Done in the
+      [concurrent](https://github.com/grandchild/avs-preset-depends/tree/concurrent) branch.
+    - Speedup: ~1.3x
+    - Binary size: +20%
+    - Code complexity: One more function, and a split between file collection and
+      resource gathering.
 - Unit- & integration testing
 - CI & downloadable release builds
 
