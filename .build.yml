@@ -17,10 +17,11 @@ tasks:
   - check: |
       cd avs-preset-depends
       rustfmt --check **/*.rs
-      cargo clippy
+      cargo clippy -- -Dwarnings
   - test: |
       cd avs-preset-depends
       cargo test
+      cargo test --doc
   - build-linux: |
       cd avs-preset-depends
       cargo b --release --target x86_64-unknown-linux-gnu

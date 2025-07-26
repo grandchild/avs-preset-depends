@@ -60,3 +60,5 @@ jobs:
         run: cargo clippy -- -Dwarnings
       - name: tests
         run: cargo test
+      - name: run doc examples
+        run: cargo test --doc
