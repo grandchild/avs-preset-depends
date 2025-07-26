@@ -598,7 +598,7 @@ fn scan_components(
 /// within AVS and because the x86 stack grows from the top of the process's memory
 /// range downwards, realistically values are always well above [AVS_APE_SEPARATOR].
 fn get_component_len_and_id(
-    buf: &Vec<u8>,
+    buf: &[u8],
     mut pos: usize,
 ) -> Result<(usize, CompID), &'static str> {
     if pos + SIZE_INT32 * 2 > buf.len() {
@@ -712,7 +712,7 @@ fn collect_ape_file_c_strings(file_path: &Path, file_path_str: String) -> Vec<St
     let mut strings: Vec<String> = Vec::new();
     let ape_file_bytes = match read_binary_file(file_path, &file_path_str) {
         Err(why) => {
-            eprintln!("{}", why);
+            eprintln!("{why}");
             return strings;
         }
         Ok(bytes) => bytes,
@@ -953,7 +953,7 @@ impl std::fmt::Debug for FieldType {
 impl std::fmt::Debug for CompID {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self {
-            CompID::Builtin(id) => write!(fmt, "Builtin {}/0x{:02x}", id, id),
+            CompID::Builtin(id) => write!(fmt, "Builtin {id}/0x{id:02x}"),
             CompID::Ape(id) => write!(
                 fmt,
                 "APE '{}'",
