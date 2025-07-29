@@ -19,7 +19,7 @@ cargo build --release
 ### Usage
 
 ```
-Usage: preset-depends [<path...>] [-w <winamp-dir>] [-c]
+Usage: preset-depends [<path...>] [-w <winamp-dir>] [-c] [-d]
 
 For each path (either file or directory) print out a sectioned list of resources
 the preset(s) depend on.
@@ -34,8 +34,11 @@ Options:
                     or `Winamp/Plugins/avs`.
   -c, --count       collect preset counts for each resource. note multiple uses
                     in one preset still only count as one.
-  --help            display usage information
-```
+  -d, --defaults    report default resource usage. the default images/fonts are
+                    builtin, so technically it's not a resource, but it can be
+                    interesting for usage statistics.
+  --help, help      display usage information
+  ```
 
 
 #### Example Output
