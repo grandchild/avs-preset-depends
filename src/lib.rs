@@ -191,6 +191,8 @@ pub struct Resource {
     pub string: String,
     /// The availability on-disk, if applicable
     pub available: ResourceAvailable,
+    /// If the resource is the default resource, contains the effect name.
+    pub default_for: Option<&'static str>,
 }
 
 /// An APE plugin binary file on disk with its ASCII strings.
@@ -385,7 +387,7 @@ pub fn get_depends<'a>(
 /// Check if the given path is an AVS file or a directory, collect resources therein
 /// (in case of directories recursively) and return them.
 ///
-/// In case of any permission errors return the empty set.
+/// In case of any permission errors return the empty map.
 fn scan_dirs_and_preset_files(
     file_path: &Path,
     resource_specs: &HashMap<CompID, ResourceSpec>,
@@ -453,9 +455,9 @@ fn read_binary_file(
     Ok(preset_bytes)
 }
 
-/// Return a set of all resources referenced in the preset.
+/// Return a map of all resources referenced in the preset.
 ///
-/// If the preset file is inaccessible or invalid return the empty set.
+/// If the preset file is inaccessible or invalid return the empty map.
 fn scan_preset_file(
     file_path: &Path,
     file_path_str: &String,
@@ -482,7 +484,7 @@ fn scan_preset_file(
 
 /// Recursively walk the preset tree and find any effects that have resources.
 ///
-/// Return any resources found, or an empty set.
+/// Return any resources found, or an empty map.
 fn scan_components(
     buf: &Vec<u8>,
     mut pos: usize,
@@ -508,6 +510,7 @@ fn scan_components(
                             string,
                             rtype: ResourceType::Ape,
                             available: ResourceAvailable::Undetermined,
+                            default_for: None,
                         },
                         1,
                     );
@@ -531,20 +534,33 @@ fn scan_components(
                         string_from_u8vec_sizestr1252(buf, pos + offset)
                     }
                 };
-                if string.is_empty() {
-                    if let EmptyIs::Error | EmptyIs::Rare = spec.empty_significance {
-                        eprintln!(
+                if string.is_empty() || spec.treat_as_empty.is_some_and(|s| s == string)
+                {
+                    match spec.empty_significance {
+                        EmptyIs::Error | EmptyIs::Rare => eprintln!(
                             "{} {} is empty in '{file_path_str}' @0x{pos:x}",
                             spec.name, spec.rtype,
-                        )
+                        ),
+                        EmptyIs::Default => {
+                            resources.insert(
+                                Resource {
+                                    string: String::new(),
+                                    rtype: spec.rtype,
+                                    available: ResourceAvailable::Undetermined,
+                                    default_for: Some(spec.name),
+                                },
+                                1,
+                            );
+                        }
+                        _ => (),
                     }
-                }
-                if !string.is_empty() && Some(string.as_str()) != spec.treat_as_empty {
+                } else {
                     resources.insert(
                         Resource {
                             string,
                             rtype: spec.rtype,
                             available: ResourceAvailable::Undetermined,
+                            default_for: None,
                         },
                         1,
                     );

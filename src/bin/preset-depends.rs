@@ -20,6 +20,11 @@ pub struct Arguments {
     /// only count as one.
     #[argh(switch, short = 'c')]
     pub count: bool,
+    /// report default resource usage. the default images/fonts are builtin, so
+    /// technically it's not a resource, but it can be interesting for usage
+    /// statistics.
+    #[argh(switch, short = 'd')]
+    pub defaults: bool,
 }
 
 fn main() {
@@ -28,7 +33,10 @@ fn main() {
     for (path, resources) in resources_for_paths {
         println!("{}:", quote_yaml_string_if_needed(path));
         let mut last_resource_type = None;
-        for (Resource { string, rtype, available }, count) in &resources {
+        for (Resource { string, rtype, available, default_for }, count) in &resources {
+            if !args.defaults && default_for.is_some() {
+                continue;
+            }
             if Some(rtype) != last_resource_type {
                 println!("  {rtype}s:");
             }
@@ -36,10 +44,19 @@ fn main() {
             if !args.count {
                 print!("- ");
             }
-            if available == &ResourceAvailable::No {
-                print!("!missing ")
+            match default_for {
+                None => {
+                    if available == &ResourceAvailable::No {
+                        print!("!missing ");
+                    }
+                    print!("{}", quote_yaml_string_if_needed(string));
+                }
+                Some(effect) => {
+                    print!("!default ");
+                    let default_str = format!("DEFAULT {rtype} for {effect}");
+                    print!("{}", quote_yaml_string_if_needed(default_str.as_ref()));
+                }
             }
-            print!("{}", quote_yaml_string_if_needed(string));
             if args.count {
                 print!(": {count}");
             }

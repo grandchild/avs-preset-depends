@@ -31,7 +31,7 @@ fn test_scan_components_simple() {
     let buf = b"\0\0\0\0\x01\0\0\0A\0".to_vec();
     let results =
         scan_components(&buf, 0, buf.len(), &"".to_string(), &resource_specs).unwrap();
-    for (Resource { string, rtype, available: _ }, count) in results {
+    for (Resource { string, rtype, .. }, count) in results {
         assert_eq!(string, "A",);
         assert_eq!(rtype, ResourceType::Image);
         assert_eq!(count, 1);
@@ -45,7 +45,7 @@ fn test_scan_components_offset() {
     let buf = b"\0\0\0\0\x01\0\0\0A\0".to_vec();
     let results =
         scan_components(&buf, 0, buf.len(), &"".to_string(), &resource_specs).unwrap();
-    for (Resource { string, rtype, available: _ }, count) in results {
+    for (Resource { string, rtype, .. }, count) in results {
         assert_eq!(string, "A");
         assert_eq!(rtype, ResourceType::Image);
         assert_eq!(count, 1);
