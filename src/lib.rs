@@ -409,7 +409,7 @@ fn scan_dirs_and_preset_files(
                 Ok(entry) => {
                     match scan_dirs_and_preset_files(&entry.path(), resource_specs) {
                         Ok(mut new_resources) => {
-                            join_resources(&mut resources, &mut new_resources)
+                            merge_resources(&mut resources, &mut new_resources)
                         }
                         Err(why) => eprintln!("{why}"),
                     }
@@ -586,9 +586,7 @@ fn scan_components(
                         file_path_str,
                         resource_specs,
                     ) {
-                        Ok(mut new_resources) => {
-                            join_resources(&mut resources, &mut new_resources)
-                        }
+                        Ok(mut new_resources) => resources.append(&mut new_resources),
                         Err(why) => eprintln!("{why}"),
                     }
                 }
@@ -818,7 +816,7 @@ fn find_ape_file_match<'a>(
 }
 
 /// Move elements from source into target, adding the counter values together.
-fn join_resources(
+fn merge_resources(
     target: &mut BTreeMap<Resource, usize>,
     source: &mut BTreeMap<Resource, usize>,
 ) {
